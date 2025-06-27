@@ -10,6 +10,7 @@ import { setUser } from '../redux/features/userSlice';
 import { FaSignOutAlt } from 'react-icons/fa';
 // import { setData } from '../redux/features/dataSlice';
 import { toast } from "react-toastify";
+import { useRef } from 'react';
 
 import Spinner from './Spinner'
 import "jspdf-autotable";
@@ -52,6 +53,11 @@ const Center = () => {
   const token = userData?.token || localStorage.getItem("token");
   // console.log(token);
 
+  const lastIdRef = useRef(0); // keeps track of last used ID
+ const getNextId = () => {
+  lastIdRef.current += 1;
+  return lastIdRef.current;
+};
 
   const [ledger, setLedger] = useState("LEDGER");
   const [drawTime, setDrawTime] = useState("11 AM");  // time slot
@@ -139,6 +145,7 @@ const Center = () => {
         // dispatch(hideLoading()); // Optional
         toast.success("record added successfully! ✅");  // we have to use toast message instead of this (TBT)
         // setEntries([]); // Clear after saving
+        setNo("");
 
         await getAndSetVoucherData();    // Re-fetch data to update the UI
 
@@ -425,9 +432,9 @@ const Center = () => {
 
     // Step 2: Insert 'x' at each position with padding
     for (let perm of perms) {
-      result.push("x" + perm);                      // x001, x010, x100
-      result.push(perm[0] + "x" + perm.slice(1));   // 0x01, 0x10, 1x00
-      result.push(perm.slice(0, 2) + "x" + perm[2]); // 00x1, 01x0, 10x0
+      result.push("+" + perm);                      // x001, x010, x100
+      result.push(perm[0] + "+" + perm.slice(1));   // 0x01, 0x10, 1x00
+      result.push(perm.slice(0, 2) + "+" + perm[2]); // 00x1, 01x0, 10x0
     }
 
     return Array.from(new Set(result)); // Remove any duplicates
@@ -461,6 +468,29 @@ const Center = () => {
     return Array.from(new Set(allPermutations)).sort();
   };
   
+
+  const handleSingleEntrySubmit = () => {
+  if (!no || !f || !s) {
+    toast.warning("Please fill all fields.");
+    return;
+  }
+
+  const entry = {
+    id: entries.length+1, // or use getNextId() / uuid()
+    no,
+    f,
+    s,
+    selected: false,
+  };
+
+  addEntry([entry]);
+
+  // Optional: clear fields
+  setNo("");
+  // setF("");
+  // setS("");
+};
+
 
 
   const handle4FigurePacket = () => {
@@ -578,7 +608,7 @@ const Center = () => {
       const generatedPermutations = getPermutations(no);
       const updatedEntriesback = generatedPermutations.map((perm, index) => ({
         id: entries.length + index + 1,
-        no: `x${perm}`, // Ensure both are strings
+        no: `+${perm}`, // Ensure both are strings
         f: f,
         s: s,
         selected: false
@@ -598,7 +628,7 @@ const Center = () => {
     if (no && f && s) {
       const generatedPermutations = getPermutations(no);
       const updatedEntriescross = generatedPermutations.map((perm, index) => {
-        const modifiedPerm = perm.slice(0, 1) + "x" + perm.slice(1); // Insert "x" at the second position
+        const modifiedPerm = perm.slice(0, 1) + "+" + perm.slice(1); // Insert "x" at the second position
 
         return {
           id: entries.length + index + 1,
@@ -619,7 +649,7 @@ const Center = () => {
     if (no && f && s) {
       const generatedPermutations = getPermutations(no);
       const updatedEntriesdouble = generatedPermutations.map((perm, index) => {
-        const modifiedPerm = perm.slice(0, 2) + "x" + perm.slice(2); // Insert "x" at the second position
+        const modifiedPerm = perm.slice(0, 2) + "+" + perm.slice(2); // Insert "x" at the second position
 
         return {
           id: entries.length + index + 1,
@@ -1087,20 +1117,92 @@ const Center = () => {
 
   
 
+const generateDailyBillPDF = async () => {
+  console.log("Generating Daily Bill PDF...");
+
+  const fetchedEntries = await fetchVoucherData(drawDate, drawTime);
+  if (!Array.isArray(fetchedEntries) || fetchedEntries.length === 0) {
+    toast.info("No record found for the selected date.");
+    return;
+  }
+
+  const doc = new jsPDF("p", "mm", "a4");
+  const pageWidth = doc.internal.pageSize.width;
+
+  // Header
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(18);
+  doc.text("Daily Bill", pageWidth / 2, 15, { align: "center" });
+
+  doc.setFontSize(12);
+  doc.setFont("helvetica", "normal");
+  doc.text(`Dealer: ${userData?.user.username}`, 14, 30);
+  doc.text(`City: ${userData?.user.city}`, 14, 40);
+  doc.text(`Date: ${drawDate}`, 14, 50);
+
+  const groupedByTimeSlot = {};
+  fetchedEntries.forEach(entry => {
+    const slot = entry.timeSlot;
+    if (!groupedByTimeSlot[slot]) {
+      groupedByTimeSlot[slot] = [];
+    }
+    groupedByTimeSlot[slot].push(...entry.data);
+  });
+
+  let y = 70;
+  const rowHeight = 10;
+  const colWidths = [60, 60];
+  const x = 14;
+
+  // Table Header with box
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+  doc.rect(x, y, colWidths[0], rowHeight);
+  doc.text("Draw Time", x + 2, y + 7);
+  doc.rect(x + colWidths[0], y, colWidths[1], rowHeight);
+  doc.text("SALE", x + colWidths[0] + 2, y + 7);
+  y += rowHeight;
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(10);
+
+  let dailyGrandTotal = 0;
+
+  Object.entries(groupedByTimeSlot).forEach(([timeSlot, entries]) => {
+    const grandTotal = entries.reduce((sum, item) => sum + item.firstPrice + item.secondPrice, 0);
+    dailyGrandTotal += grandTotal;
+
+    doc.rect(x, y, colWidths[0], rowHeight);
+    doc.text(timeSlot, x + 2, y + 7);
+
+    doc.rect(x + colWidths[0], y, colWidths[1], rowHeight);
+    doc.text(grandTotal.toString(), x + colWidths[0] + 2, y + 7);
+
+    y += rowHeight;
+
+    if (y > 270) {
+      doc.addPage();
+      y = 30;
+    }
+  });
+
+  // Final Grand Total in styled box
+  // y += 10;
+  // doc.setFont("helvetica", "bold");
+  // doc.rect(x, y, colWidths[0], rowHeight);
+  // doc.text("Daily Grand Total:", x + 2, y + 7);
+  // doc.rect(x + colWidths[0], y, colWidths[1], rowHeight);
+  // doc.text(dailyGrandTotal.toString(), x + colWidths[0] + 2, y + 7);
+
+  doc.save("Daily_Bill_RLC.pdf");
+  toast.success("Daily Bill PDF downloaded successfully!");
+};
 
 
 
 
-    const generateDailyBillPDF = async () => {
-        // diplay all slots game
-        // prizes 
-        // sale Total 
-        // safi-sale 
-        // Sub Total 
-        // Profit/Loss share 
-        // Bill 
-        console.log("Generating Daily Bill PDF...");  
-      }
+  
+
 
 
     const handleDownloadPDF = async () => {
@@ -1328,7 +1430,10 @@ const Center = () => {
         </div>
 
         <div className='bg-gray-800 rounded-xl p-4 border border-gray-900' >
-          Draw numbers
+          <h1 className='text-2xl  text-center'>NOTIFATION</h1>
+          Winning numbers
+          <h3>F:9876</h3>
+          <h3>S:2362, 7612, 8722,</h3>
         </div>
 
       </header>
@@ -1396,28 +1501,28 @@ const Center = () => {
               onChange={(e) => setNo(e.target.value)}
               placeholder='NO'
               className='border p-2 rounded w-1/3'
-              disabled={isPastClosingTime(drawTime)}
+              // disabled={isPastClosingTime(drawTime)}
             />
             <input
-              type='text'
+              type='text' 
               value={f}
               onChange={(e) => setF(e.target.value)}
               placeholder='F'
               className='border p-2 rounded w-1/3'
-              disabled={isPastClosingTime(drawTime)}
-            />
+              // disabled={isPastClosingTime(drawTime)}
+            />  
             <input
               type='text'
               value={s}
               onChange={(e) => setS(e.target.value)}
               placeholder='S'
               className='border p-2 rounded w-1/3'
-              disabled={isPastClosingTime(drawTime)}
+              // disabled={isPastClosingTime(drawTimene)}
             />
             <button
-              onClick={(e) => addEntry(e)}
+              onClick={handleSingleEntrySubmit}
               className={`px-4 py-2 rounded text-white ${isPastClosingTime(drawTime) ? "bg-gray-600 cursor-not-allowed" : "bg-green-600 hover:bg-green-500"}`}
-              disabled={isPastClosingTime(drawTime)}
+              // disabled={isPastClosingTime(drawTime)}
             >
               Save
             </button>

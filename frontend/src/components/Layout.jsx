@@ -6,20 +6,27 @@ import { useNavigate } from 'react-router-dom';
 // import { showLoading, hideLoading } from '../redux/features/alertSlice';
 // import { setUser } from '../redux/features/userSlice';
 // imort the FaSignOutAlt
-import { FaSignOutAlt } from 'react-icons/fa';
+import { FaFile, FaSignOutAlt } from 'react-icons/fa';
 // import { setData } from '../redux/features/dataSlice';
 import { toast } from "react-toastify";
 import Center from './Center';
+import DistributerUsers from '../pages/distributor/DistributerUsers';
+import DistributorCreateUser from '../pages/distributor/DistributorCreateUser';
+import DistributorEditUser from '../pages/distributor/DistributorEditUser'; // Import the edit user component
 import Spinner from '../components/Spinner'
 import "jspdf-autotable";
 import {
- 
   FaBook,
   FaCalculator,
   FaInbox,
   FaDice,
-
+  FaUsers,
+  FaUserPlus,
+  FaFileAlt,
+  FaUserEdit, // Import icon for editing users
 } from 'react-icons/fa';
+import RoleBasedComponent from './RoleBasedRoute';
+import { Link } from 'react-router-dom';
 const Layout = () => {
   // Hooks to manage states of the variables
   // State for ledger selection, date, and draw time
@@ -63,6 +70,7 @@ const handleLogout = (navigate) => {
 
  
   const [activeTab, setActiveTab] = useState("book");
+  const [selectedUserId, setSelectedUserId] = useState(null); // Add state for selected user ID
 
 
   return (
@@ -105,6 +113,49 @@ const handleLogout = (navigate) => {
           <FaInbox className="text-green-400" />
           Voucher Inbox
         </button>
+
+        {/* Distributor-only features */}
+        <RoleBasedComponent requiredRoles={['distributor', 'admin']}>
+          <button
+            onClick={() => setActiveTab("manage-users")}
+            className={`flex items-center px-3 py-2.5 rounded-md gap-2 transition-colors ${
+              activeTab === "manage-users" ? "bg-gray-700" : "hover:bg-gray-700"
+            }`}
+          >
+            <FaUsers className="text-blue-400" />
+            Manage Users
+          </button>
+
+          <button
+            onClick={() => setActiveTab("create-user")}
+            className={`flex items-center px-3 py-2.5 rounded-md gap-2 transition-colors ${
+              activeTab === "create-user" ? "bg-gray-700" : "hover:bg-gray-700"
+            }`}
+          >
+            <FaUserPlus className="text-green-400" />
+            Create User
+          </button>
+
+          <button
+            onClick={() => setActiveTab("edit-user")}
+            className={`flex items-center px-3 py-2.5 rounded-md gap-2 transition-colors ${
+              activeTab === "edit-user" ? "bg-gray-700" : "hover:bg-gray-700"
+            }`}
+          >
+            <FaUserEdit className="text-yellow-400" />
+            Edit User
+          </button>
+
+          <button
+            onClick={() => setActiveTab("reports")}
+            className={`flex items-center px-3 py-2.5 rounded-md gap-2 transition-colors ${
+              activeTab === "reports" ? "bg-gray-700" : "hover:bg-gray-700"
+            }`}
+          >
+            <FaFileAlt className="text-violet-400" />
+            Reports
+          </button>
+        </RoleBasedComponent>
       </nav>
 
       <button
@@ -121,6 +172,14 @@ const handleLogout = (navigate) => {
       {activeTab === "book" && <Center />}
       {activeTab === "hisab" && <div className="p-6">Hisab content coming soon...</div>}  
       {activeTab === "voucher" && <div className="p-6">Voucher Inbox coming soon...</div>}  
+      {activeTab === "manage-users" && <DistributerUsers onEditUser={(userId) => {
+        console.log("Editing user with ID:", userId);
+        setSelectedUserId(userId);
+        setActiveTab("edit-user");
+      }}/>}
+      {activeTab === "create-user" && <DistributorCreateUser theme="dark" />}
+      {activeTab === "edit-user" && <DistributorEditUser userId={selectedUserId} theme="dark" />}
+      {activeTab === "reports" && <div className="p-6">Reports content coming soon...</div>}
     </div>
   </div>
   );

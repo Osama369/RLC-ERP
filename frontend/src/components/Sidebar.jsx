@@ -12,6 +12,9 @@ const Sidebar = () => {
         <li className="mb-4">
           <Link to="/admin/manage-users" className="hover:text-gray-300">Manage Users</Link>
         </li>
+        <li className="mb-4">
+          <Link to="/admin/create-user" className="hover:text-gray-300">Create User</Link>
+        </li>
       </ul>
     </div>
   );

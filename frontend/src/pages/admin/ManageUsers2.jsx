@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { useDispatch } from "react-redux";
 import { showLoading, hideLoading } from "../../redux/features/alertSlice";
@@ -10,26 +10,33 @@ const ManageUsers = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const dispatch = useDispatch();
+  
 
-  const fetchUsers = async () => {
-    dispatch(showLoading());
-    setError(null);
-    setIsLoading(true);
-    const token = localStorage.getItem("adminToken");
-
-    axios.get("/api/v1/users/", {
-      headers: { Authorization: `Bearer ${token}` },
-    }).then(res => {
-      console.log("Got data:", res.data);
-      setUsers(res.data);
-    }).catch(err => {
-      console.error("Error fetching users:", err);
+  const fetchUsers = useCallback(async () => {
+    try {
+      dispatch(showLoading());
+      setError(null);
+      setIsLoading(true);
+      
+      const token = localStorage.getItem("adminToken");
+      const response = await axios.get("/api/v1/users/", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      console.log("Fetched users:", response.data);
+      // Ensure we always set an array, even if response.data is undefined
+      setUsers(Array.isArray(response?.data) ? response.data : []);
+    } catch (error) {
+      console.error("Fetch users error:", error);
       setError(error.response?.data?.message || "Failed to load users");
       toast.error(error.response?.data?.message || "Failed to load users");
       setUsers([]); // Reset to empty array on error
-    });
-  }
+    } finally {
+      setIsLoading(false);
+      dispatch(hideLoading());
+    }
+  }, [dispatch]);
 
+  // Toggle user active status based on your actual schema (isActive instead of status)
   const toggleStatus = async (id) => {
     try {
       dispatch(showLoading());
@@ -46,7 +53,7 @@ const ManageUsers = () => {
       const token = localStorage.getItem("adminToken");
       
       // Fix the API call structure - send data and headers separately
-      await axios.patch(
+      await axios.put(
         `/api/v1/users/${id}/active`,
         { isActive: newStatus }, // This is the request body
         {
@@ -72,6 +79,7 @@ const ManageUsers = () => {
     }
   };
 
+  // Delete user
   const deleteUser = async (id) => {
     if (!window.confirm("Are you sure you want to delete this user?")) {
       return;
@@ -99,35 +107,48 @@ const ManageUsers = () => {
   };
 
   useEffect(() => {
-    console.log("Effect run");
+    const controller = new AbortController();
+    
     fetchUsers();
-    setIsLoading(false);
-    dispatch(hideLoading());
-  }, []);
-  
-  return <div>
-          {error && (
-            <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-4">
-              <p>{error}</p>
-            </div>
-          )}
+    console.log("Backend returning:", users.slice(0, 2)); 
+    return () => controller.abort(); // Cleanup on unmount
+  }, [fetchUsers]);
+
+  return (
+    <div className="p-6">
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-bold">Manage Users</h1>
+        <button 
+          onClick={fetchUsers}
+          className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+        >
+          Refresh
+        </button>
+      </div>
       
-          {isLoading ? (
-            <div className="flex justify-center items-center h-64">
-              <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-            </div>
-          ) : !users || users.length === 0 ? (
-            <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4">
-              <p>No users found.</p>
-            </div>
-          ) : (
-            <UserTable 
-              users={users} 
-              toggleStatus={toggleStatus}
-              deleteUser={deleteUser} 
-            />
-          )}
-    </div>;
-}
+      {error && (
+        <div className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 mb-4">
+          <p>{error}</p>
+        </div>
+      )}
+      
+      {isLoading ? (
+        <div className="flex justify-center items-center h-64">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+        </div>
+      ) : !users || users.length === 0 ? (
+        <div className="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4">
+          <p>No users found.</p>
+        </div>
+      ) : (
+        <UserTable 
+          users={users} 
+          toggleStatus={toggleStatus}
+          deleteUser={deleteUser} 
+        />
+      )}
+    </div>
+  );
+};
 
 export default ManageUsers;

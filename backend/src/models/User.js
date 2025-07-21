@@ -14,6 +14,7 @@ const userSchema = new mongoose.Schema({
   doubleFigure: { type: Number, default: 0 },
   tripleFigure: { type: Number, default: 0 },
   fourFigure: { type: Number, default: 0 },
+  commission: { type: Number, default: 0 },
   isActive : {
     type: Boolean, 
     default: true

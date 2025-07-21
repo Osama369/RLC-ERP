@@ -14,6 +14,7 @@ const UserForm = ({ onSubmit, initialData = {}, isEditing = false, theme }) => {
     doubleFigure: initialData.doubleFigure || 0,
     tripleFigure: initialData.tripleFigure || 0,
     fourFigure: initialData.fourFigure || 0,
+    commission: initialData.commission || 0,
     password: "",
     confirmPassword: "",
   });
@@ -178,6 +179,20 @@ const UserForm = ({ onSubmit, initialData = {}, isEditing = false, theme }) => {
             onChange={handleChange}
             className="w-full border rounded-md p-2 focus:ring focus:ring-blue-300"
             placeholder="Enter four figure"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <label className="block font-medium flex items-center gap-2">
+            <FaCalculator className="text-blue-500" /> Commission:
+          </label>
+          <input
+            type="number"
+            name="commission"
+            value={formData.commission}
+            onChange={handleChange}
+            className="w-full border rounded-md p-2 focus:ring focus:ring-blue-300"
+            placeholder="Enter Commission"
           />
         </div>
 

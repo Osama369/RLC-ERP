@@ -14,11 +14,11 @@ const getAllUsers = async (req, res) => {   // admin will see all users at admin
 };
 
 const createUser = async (req, res) => {  // can create user
-  const { username, password, dealerId, city , phone , email, balance } = req.body;
+  const { username, password, dealerId, city , phone , email, balance, singleFigure, doubleFigure, tripleFigure, fourFigure, commission } = req.body;
   const role = 'distributor'; // admin can create users with role 'distributor'
   const createdBy = req.user.id; // Get the admin ID from the authenticated user
   try {
-    const user = new User({ username, password, city, dealerId , phone , email, role, balance, createdBy }); 
+    const user = new User({ username, password, city, dealerId , phone , email, role, balance, singleFigure, doubleFigure, tripleFigure, fourFigure, commission, createdBy }); 
     await user.save();
     res.status(201).json({ message: "User created successfully" });
   } catch (error) {
@@ -195,11 +195,11 @@ const getDistributorUsers = async (req, res) => {
 };
 
 const createDistributorUser = async (req, res) => { 
-  const { username, password, dealerId, city , phone , email, balance, singleFigure, doubleFigure, tripleFigure, fourFigure } = req.body;
+  const { username, password, dealerId, city , phone , email, balance, singleFigure, doubleFigure, tripleFigure, fourFigure, commission } = req.body;
   const role = 'user'; // Distributor can only create regular users
   const createdBy = req.user.id; // Get the distributor ID from the authenticated user
   try {
-    const user = new User({ username, password, city, dealerId , phone , email, role, balance, singleFigure, doubleFigure, tripleFigure, fourFigure, createdBy }); 
+    const user = new User({ username, password, city, dealerId , phone , email, role, balance, singleFigure, doubleFigure, tripleFigure, fourFigure, commission, createdBy }); 
     await user.save();
     res.status(201).json({ message: "Distributor user created successfully" });
   } catch (error) {

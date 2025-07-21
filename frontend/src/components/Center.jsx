@@ -72,6 +72,14 @@ const Center = () => {
   const [selectAll, setSelectAll] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [file, setFile] = useState(null);
+  const [winningNumbers, setWinningNumbers] = useState([
+    { number: "2453", color: [255, 0, 0], type: "first" },    // Red (RGB)
+    { number: "1157", color: [0, 0, 255], type: "second" },   // Blue (RGB)
+    { number: "2560", color: [0, 0, 255], type: "second" },   // Blue (RGB)
+    { number: "8149", color: [0, 0, 255], type: "second" },   // Blue (RGB)
+    { number: "8440", color: [0, 0, 255], type: "third" }     // Blue (RGB)
+    
+  ]);
 
   // State for storing permutations
   const [permutations, setPermutations] = useState([]);  // we will set permutation in the table entreis
@@ -749,12 +757,12 @@ const Center = () => {
     }
   };
 
-    const handlePacket    =  ()=>{
+  const handlePacket    =  ()=>{
         // 
-    }
+  }
    
     // 1. generate voucher pdf 
-    const generateVoucherPDF = async () =>{
+const generateVoucherPDF = async () =>{
 
        const fetchedEntries = await fetchVoucherData(drawDate, drawTime);
       if (fetchedEntries.length === 0) {
@@ -886,9 +894,9 @@ const Center = () => {
       doc.save("Voucher_Sheet_RLC.pdf");
       toast.success("Voucher PDF downloaded successfully!");
        
-    }
+}
 
-       const generateLedgerPDF = async () => {
+const generateLedgerPDF = async () => {
    // console.log("Generating Ledger PDF...");
  
     // user's commison assigned by distributor admin
@@ -915,17 +923,33 @@ const Center = () => {
       }))
     );
 
-  const akra = [], tandola = [], pangora = [];
+  const hinsa = [], akra = [], tandola = [], pangora = [];
 
   allVoucherRows.forEach(({ number, first, second }) => {
-    if (
+    // if (
+    //   /^\d{2}$/.test(number) ||
+    //   (number.includes('+') && number.length <= 4)
+    // ) {
+    //   akra.push([number, first, second]);
+    // } else if (
+    //   /^\d{3}$/.test(number) ||
+    //   (number.length === 4 && number.includes('x'))
+    // ) {
+    //   tandola.push([number, first, second]);
+    // } else if (/^\d{4}$/.test(number)) {
+    //   pangora.push([number, first, second]);
+    // }
+    if (/^\d{1}$/.test(number)) {
+      // Single digit numbers go to hinsa
+      hinsa.push([number, first, second]);
+    } else if (
       /^\d{2}$/.test(number) ||
-      (number.includes('+') && number.length <= 4)
+      (number.includes('+') && number.length <= 3)
     ) {
       akra.push([number, first, second]);
     } else if (
       /^\d{3}$/.test(number) ||
-      (number.length === 4 && number.includes('x'))
+      (number.length === 4 && number.includes('+'))
     ) {
       tandola.push([number, first, second]);
     } else if (/^\d{4}$/.test(number)) {
@@ -944,6 +968,35 @@ const Center = () => {
     doc.text(`City: ${userData?.user.city}`, 14, 40);
     doc.text(`Draw Date: ${drawDate}`, 14, 50);
     doc.text(`Draw Time: ${drawTime}`, 14, 60);
+    doc.text(`Winning Numbers: `, 14, 70);
+    // const winningNumbers = [
+    //   { number: "F: 3456", color: [255, 0, 0] },    // Red (RGB)
+    //   { number: "S: 6768", color: [0, 0, 255] },    // Blue (RGB)
+    //   { number: "S: 7990", color: [0, 0, 255] }     // Blue (RGB)
+    // ];
+    
+    let xPosition = 14 + doc.getTextWidth("Winning Numbers: "); // Start after the label
+    
+    winningNumbers.forEach((item, index) => {
+      // Set the color for this number
+      doc.setTextColor(item.color[0], item.color[1], item.color[2]);
+      
+      // Add the number
+      doc.text(item.number, xPosition, 70);
+      
+      // Move x position for next number
+      xPosition += doc.getTextWidth(item.number);
+      
+      // Add comma and space (except for last number)
+      if (index < winningNumbers.length - 1) {
+        doc.setTextColor(0, 0, 0); // Black for space
+        doc.text("    ", xPosition, 70);
+        xPosition += doc.getTextWidth("    ");
+      }
+    });
+    
+    // Reset text color to black for subsequent text
+    doc.setTextColor(0, 0, 0);
   };
 
   const calculateTotals = (rows) => {
@@ -957,94 +1010,511 @@ const Center = () => {
     );
   };
 
+  // const getEntryColor = (entryNumber) => {
+  //   // Check for exact match first
+  //   for (const winning of winningNumbers) {
+  //     if (entryNumber === winning.number) {
+  //       return winning.color;
+  //     }
+  //   }
+  
+  //   // Check for positional matches with + symbols
+  //   for (const winning of winningNumbers) {
+  //     if (checkPositionalMatch(entryNumber, winning.number)) {
+  //       return winning.color;
+  //     }
+  //   }
+  
+  //   return [0, 0, 0]; // Default black color
+  // };
+  
+  // const checkPositionalMatch = (entry, winningNumber) => {
+  //   // Remove any spaces and ensure consistent format
+  //   const cleanEntry = entry.toString().trim();
+    
+  //   // if (!cleanEntry.includes('+')) {
+  //   //   // For plain numbers, only check if they are exact substrings of winning number
+  //   //   // AND the entry has '+' patterns or is exactly the winning number
+  //   //   return false;
+  //   // }
+  //   // Handle patterns like +4+6, +34+, etc.
+  //   if (cleanEntry.includes('+')) {
+  //     // For 2-digit patterns like +4+6
+  //     if (cleanEntry.length === 4 && cleanEntry.match(/^\+\d\+\d$/)) {
+  //       const digit1 = cleanEntry[1]; // 4
+  //       const digit3 = cleanEntry[3]; // 6
+        
+  //       // Check if these digits match positions in winning number
+  //       if (winningNumber[1] === digit1 && winningNumber[3] === digit3) {
+  //         return true; // Matches positions 2 and 4 of 3456
+  //       }
+  //     }
+      
+  //     // For 3-digit patterns like +45+ (positions 2,3)
+  //     if (cleanEntry.length === 4 && cleanEntry.match(/^\+\d\d\+$/)) {
+  //       const digits = cleanEntry.slice(1, 3); // "45"
+  //       if (winningNumber.slice(1, 3) === digits) {
+  //         return true;
+  //       }
+  //     }
+      
+  //     // For patterns like 3+5+ (positions 1,3)
+  //     if (cleanEntry.length === 4 && cleanEntry.match(/^\d\+\d\+$/)) {
+  //       const digit1 = cleanEntry[0];
+  //       const digit3 = cleanEntry[2];
+  //       if (winningNumber[0] === digit1 && winningNumber[2] === digit3) {
+  //         return true;
+  //       }
+  //     }
+      
+  //     // For patterns like ++56 (last two positions)
+  //     if (cleanEntry.length === 4 && cleanEntry.match(/^\+\+\d\d$/)) {
+  //       const digits = cleanEntry.slice(2); // "56"
+  //       if (winningNumber.slice(2) === digits) {
+  //         return true;
+  //       }
+  //     }
+      
+  //     // For patterns like +76+ (checking if 76 appears in positions 2,3 of winning number)
+  //     if (cleanEntry.length === 4 && cleanEntry.match(/^\+\d\d\+$/)) {
+  //       const digits = cleanEntry.slice(1, 3); // "76"
+  //       if (winningNumber.slice(1, 3) === digits) {
+  //         return true;
+  //       }
+  //     }
+
+  //     // For patterns like 67+8 (checking consecutive positions)
+  //     if (cleanEntry.length === 4 && cleanEntry.match(/^\d\d\+\d$/)) {
+  //       const firstTwo = cleanEntry.slice(0, 2); // "67"
+  //       const lastDigit = cleanEntry[3]; // "8"
+  //       if (winningNumber.slice(0, 2) === firstTwo && winningNumber[3] === lastDigit) {
+  //         return true;
+  //       }
+  //     }
+
+  //     // For patterns like 6+68 (checking positions 1,3,4)
+  //     if (cleanEntry.length === 4 && cleanEntry.match(/^\d\+\d\d$/)) {
+  //       const firstDigit = cleanEntry[0]; // "6"
+  //       const lastTwo = cleanEntry.slice(2); // "68"
+  //       if (winningNumber[0] === firstDigit && winningNumber.slice(2) === lastTwo) {
+  //         return true;
+  //       }
+  //     }
+
+  //     // **NEW: For patterns like +990 (last 3 digits of 4-digit winning number)**
+  //     if (cleanEntry.length === 4 && cleanEntry.match(/^\+\d\d\d$/)) {
+  //       const lastThreeDigits = cleanEntry.slice(1); // "990"
+  //       if (winningNumber.slice(1) === lastThreeDigits) { // Check if 7990 ends with 990
+  //         return true;
+  //       }
+  //     }
+
+  //     // **NEW: For patterns like +99 (last 2 digits)**
+  //     if (cleanEntry.length === 3 && cleanEntry.match(/^\+\d\d$/)) {
+  //       const lastTwoDigits = cleanEntry.slice(1); // "99"
+  //       if (winningNumber.slice(-2) === lastTwoDigits) { // Check if 7990 ends with 99
+  //         return true;
+  //       }
+  //     }
+
+  //     // **NEW: For patterns like +9 (last digit)**
+  //     if (cleanEntry.length === 2 && cleanEntry.match(/^\+\d$/)) {
+  //       const lastDigit = cleanEntry.slice(1); // "9"
+  //       if (winningNumber.slice(-1) === lastDigit) { // Check if 7990 ends with 9
+  //         return true;
+  //       }
+  //     }
+
+  //     // Pattern: +8 (matches if 8 appears in position 2,3, or 4 of winning number)
+  //     if (cleanEntry.length === 2 && cleanEntry.match(/^\+\d$/)) {
+  //       const digit = cleanEntry[1];
+  //       // Check positions 2, 3, 4 (indices 1, 2, 3)
+  //       for (let i = 1; i < winningNumber.length; i++) {
+  //         if (winningNumber[i] === digit) {
+  //           return true;
+  //         }
+  //       }
+  //     }
+
+  //     // Pattern: ++8 (matches if 8 appears in position 3 or 4 of winning number)
+  //     if (cleanEntry.length === 3 && cleanEntry.match(/^\+\+\d$/)) {
+  //       const digit = cleanEntry[2];
+  //       // Check positions 3, 4 (indices 2, 3)
+  //       for (let i = 2; i < winningNumber.length; i++) {
+  //         if (winningNumber[i] === digit) {
+  //           return true;
+  //         }
+  //       }
+  //     }
+
+  //     // Pattern: +++8 (matches if 8 appears in position 4 of winning number)
+  //     if (cleanEntry.length === 4 && cleanEntry.match(/^\+\+\+\d$/)) {
+  //       const digit = cleanEntry[3];
+  //       // Check position 4 (index 3)
+  //       if (winningNumber[3] === digit) {
+  //         return true;
+  //       }
+  //     }
+  //   }
+    
+    
+  //   // Check for partial consecutive matches (like 45, 56, etc.)
+  //   if (cleanEntry.length >= 2 && cleanEntry.length <= 3 && /^\d+$/.test(cleanEntry)) {
+  //     // Only match if the entry starts from the beginning of the winning number
+  //     if (winningNumber.startsWith(cleanEntry)) {
+  //       return true;
+  //     }
+  //   }
+
+  //   // **NEW: For single digit numbers without + symbols**
+  //   // Pattern: 8 (matches if 8 appears in position 1 of winning number)
+  //   if (cleanEntry.length === 1 && /^\d$/.test(cleanEntry)) {
+  //     const digit = cleanEntry;
+  //     // Check if digit matches first position of winning number
+  //     if (winningNumber[0] === digit) {
+  //       return true;
+  //     }
+  //   }
+    
+  //   return false;
+  // };
+
+  const updateWinningNumbers = (newWinningNumbers) => {
+    setWinningNumbers(newWinningNumbers);
+  };
+
   const grandTotals = {
     first: 0,
     second: 0,
     net: 0,
-    commission: 0,
-    payable: 0,
+    // commission: 0,
+    // payable: 0,
+    winningAmount: 0,
+    firstWinning: 0,
+    secondWinning: 0,
   };
 
-  const renderSection = (title, rows, startY = 70) => {
+  // const renderSection = (title, rows, startY = 80) => {
+  //   if (rows.length === 0) return startY;
+
+  //   const rowHeight = 8;
+  //   const colWidths = [50, 40, 40];
+  //   let y = startY;
+
+  //   const totals = calculateTotals(rows);
+  //   const net = totals.first + totals.second;
+
+  //   let commissionRate = 0;
+  //   if (title === "AKRA") commissionRate = userData?.user.doubleFigure;
+  //   else if (title === "TANDOLA") commissionRate = userData?.user.tripleFigure;
+  //   else if (title === "PANGORA") commissionRate = userData?.user.fourFigure;
+
+  //   const commissionAmount = net * commissionRate;
+  //   const netPayable = net - commissionAmount;
+
+  //   grandTotals.first += totals.first;
+  //   grandTotals.second += totals.second;
+  //   grandTotals.net += net;
+  //   grandTotals.commission += commissionAmount;
+  //   grandTotals.payable += netPayable;
+
+  //   doc.setFont("helvetica", "bold");
+  //   doc.setFontSize(14);
+  //   doc.text(`${title} (${rows.length} entries)`, 14, y);
+  //   y += 8;
+
+  //   doc.setFontSize(10);
+  //   doc.setFont("helvetica", "normal");
+  //   doc.text(`First Total: ${totals.first}`, 14, y);
+  //   doc.text(`Second Total: ${totals.second}`, 70, y);
+  //   doc.text(`Net: ${net}`, 140, y);
+  //   y += 5;
+  //   doc.text(`Commission (${commissionRate * 100}%): -${commissionAmount.toFixed(2)}`, 14, y);
+  //   doc.text(`Net Payable: ${netPayable.toFixed(2)}`, 140, y);
+  //   y += 10;
+
+  //   const x = 14;
+  //   doc.setFont("helvetica", "bold");
+  //   doc.rect(x, y, colWidths[0], rowHeight);
+  //   doc.text("Number", x + 2, y + 6);
+  //   doc.rect(x + colWidths[0], y, colWidths[1], rowHeight);
+  //   doc.text("First", x + colWidths[0] + 2, y + 6);
+  //   doc.rect(x + colWidths[0] + colWidths[1], y, colWidths[2], rowHeight);
+  //   doc.text("Second", x + colWidths[0] + colWidths[1] + 2, y + 6);
+  //   y += rowHeight;
+
+  //   doc.setFont("helvetica", "normal");
+
+  //   rows.forEach(([num, f, s]) => {
+  //     if (y > 280) {
+  //       doc.addPage();
+  //       y = 20;
+  //       doc.setFont("helvetica", "bold");
+  //       doc.setFontSize(14);
+  //       doc.text(title + " (cont...)", 14, y);
+  //       y += 10;
+  //       doc.setFontSize(10);
+  //       doc.rect(x, y, colWidths[0], rowHeight);
+  //       doc.text("Number", x + 2, y + 6);
+  //       doc.rect(x + colWidths[0], y, colWidths[1], rowHeight);
+  //       doc.text("First", x + colWidths[0] + 2, y + 6);
+  //       doc.rect(x + colWidths[0] + colWidths[1], y, colWidths[2], rowHeight);
+  //       doc.text("Second", x + colWidths[0] + colWidths[1] + 2, y + 6);
+  //       y += rowHeight;
+  //       doc.setFont("helvetica", "normal");
+  //     }
+  //     const entryColor = getEntryColor(num);
+  //     doc.rect(x, y, colWidths[0], rowHeight);
+  //     doc.setTextColor(entryColor[0], entryColor[1], entryColor[2]);
+
+  //     doc.text(num.toString(), x + 2, y + 6);
+  //     doc.rect(x + colWidths[0], y, colWidths[1], rowHeight);
+  //     doc.text(f.toString(), x + colWidths[0] + 2, y + 6);
+  //     doc.rect(x + colWidths[0] + colWidths[1], y, colWidths[2], rowHeight);
+  //     doc.text(s.toString(), x + colWidths[0] + colWidths[1] + 2, y + 6);
+  //     doc.setTextColor(0, 0, 0);
+  //     y += rowHeight;
+  //   });
+
+  //   return y + 10;
+  // };
+
+  const renderSection = (title, rows, startY = 80) => {
     if (rows.length === 0) return startY;
-
+  
     const rowHeight = 8;
-    const colWidths = [50, 40, 40];
+    const colWidths = [20, 17, 17];
+    const tableWidth = colWidths.reduce((a, b) => a + b, 0);
     let y = startY;
-
+  
     const totals = calculateTotals(rows);
     const net = totals.first + totals.second;
-
+  
+    // let commissionRate = 0;
+    // if (title === "AKRA") commissionRate = userData?.user.doubleFigure;
+    // else if (title === "HINSA") commissionRate = userData?.user.singleFigure;
+    // else if (title === "TANDOLA") commissionRate = userData?.user.tripleFigure;
+    // else if (title === "PANGORA") commissionRate = userData?.user.fourFigure;
+  
+    // const commissionAmount = net * commissionRate;
+    // const netPayable = net - commissionAmount;
+  
+    // grandTotals.first += totals.first;
+    // grandTotals.second += totals.second;
+    // grandTotals.net += net;
+    // grandTotals.commission += commissionAmount;
+    // grandTotals.payable += netPayable;
+  
+    // // Section title
+    // doc.setFont("helvetica", "bold");
+    // doc.setFontSize(14);
+    // doc.text(`${title} (${rows.length} entries)`, 14, y);
+    // y += 8;
+  
+    // // Summary information
+    // doc.setFontSize(10);
+    // doc.setFont("helvetica", "normal");
+    // doc.text(`First Total: ${totals.first}`, 14, y);
+    // doc.text(`Second Total: ${totals.second}`, 60, y);
+    // doc.text(`Total : ${net}`, 106, y);
+    // doc.text(`Commission (${commissionRate}%)`, 140, y);
+    // y += 5;
     let commissionRate = 0;
-    if (title === "AKRA") commissionRate = 0.20;
-    else if (title === "TANDOLA") commissionRate = 0.20;
-    else if (title === "PANGORA") commissionRate = 0.40;
-
-    const commissionAmount = net * commissionRate;
-    const netPayable = net - commissionAmount;
-
+    let multiplier = 0;
+    
+    if (title === "HINSA") {
+      commissionRate = userData?.user.singleFigure;
+      multiplier = 8;
+    } else if (title === "AKRA") {
+      commissionRate = userData?.user.doubleFigure;
+      multiplier = 80;
+    } else if (title === "TANDOLA") {
+      commissionRate = userData?.user.tripleFigure;
+      multiplier = 800;
+    } else if (title === "PANGORA") {
+      commissionRate = userData?.user.fourFigure;
+      multiplier = 8000;
+    }
+  
+    // const commissionAmount = net * commissionRate;
+    // const netPayable = net - commissionAmount;
+  
+    // Calculate winning amounts for this section
+    let firstWinningAmount = 0;
+    let secondWinningAmount = 0;
+  
+    rows.forEach(([num, f, s]) => {
+      const entryColor = getEntryColor(num);
+      
+      // Check if this entry is highlighted (has winning color)
+      if (entryColor[0] !== 0 || entryColor[1] !== 0 || entryColor[2] !== 0) {
+        // Find which winning number this matches
+        for (const winning of winningNumbers) {
+          if (num === winning.number || checkPositionalMatch(num, winning.number)) {
+            if (winning.type === "first") {
+              firstWinningAmount += f * multiplier;
+              // secondWinningAmount += s * multiplier;
+            } else if (winning.type === "second" || winning.type === "third") {
+              // firstWinningAmount += (f * multiplier) / 3;
+              secondWinningAmount += (s * multiplier) / 3;
+            }
+            break; // Exit loop once match is found
+          }
+        }
+      }
+    });
+  
+    const totalWinningAmount = firstWinningAmount + secondWinningAmount;
+  
     grandTotals.first += totals.first;
     grandTotals.second += totals.second;
     grandTotals.net += net;
-    grandTotals.commission += commissionAmount;
-    grandTotals.payable += netPayable;
-
+    // grandTotals.commission += commissionAmount;
+    // grandTotals.payable += netPayable;
+    grandTotals.winningAmount += totalWinningAmount;
+    grandTotals.firstWinning += firstWinningAmount;
+    grandTotals.secondWinning += secondWinningAmount;
+  
+    // Section title
     doc.setFont("helvetica", "bold");
     doc.setFontSize(14);
     doc.text(`${title} (${rows.length} entries)`, 14, y);
     y += 8;
-
+  
+    // Summary information with winning amount
     doc.setFontSize(10);
     doc.setFont("helvetica", "normal");
     doc.text(`First Total: ${totals.first}`, 14, y);
-    doc.text(`Second Total: ${totals.second}`, 70, y);
-    doc.text(`Net: ${net}`, 140, y);
+    doc.text(`Second Total: ${totals.second}`, 60, y);
+    doc.text(`Total: ${net}`, 106, y);
+    doc.text(`Commission (${commissionRate}%)`, 140, y);
     y += 5;
-    doc.text(`Commission (${commissionRate * 100}%): -${commissionAmount.toFixed(2)}`, 14, y);
-    doc.text(`Net Payable: ${netPayable.toFixed(2)}`, 140, y);
-    y += 10;
-
-    const x = 14;
-    doc.setFont("helvetica", "bold");
-    doc.rect(x, y, colWidths[0], rowHeight);
-    doc.text("Number", x + 2, y + 6);
-    doc.rect(x + colWidths[0], y, colWidths[1], rowHeight);
-    doc.text("First", x + colWidths[0] + 2, y + 6);
-    doc.rect(x + colWidths[0] + colWidths[1], y, colWidths[2], rowHeight);
-    doc.text("Second", x + colWidths[0] + colWidths[1] + 2, y + 6);
-    y += rowHeight;
-
+    doc.text(`Prize Amount: ${totalWinningAmount.toFixed(2)}`, 14, y);
+    y += 5;
+  
+    // Split rows into three parts
+    const thirdPoint = Math.ceil(rows.length / 3);
+    const leftRows = rows.slice(0, thirdPoint);
+    const middleRows = rows.slice(thirdPoint, thirdPoint * 2);
+    const rightRows = rows.slice(thirdPoint * 2);
+  
+    // Table positions
+    const leftX = 14;
+    const middleX = leftX + tableWidth;
+    const rightX = middleX + tableWidth;
+  
+    // Function to draw table header
+    const drawTableHeader = (x, y) => {
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8);
+      
+      doc.rect(x, y, colWidths[0], rowHeight);
+      doc.text("Number", x + 1, y + 5);
+      
+      doc.rect(x + colWidths[0], y, colWidths[1], rowHeight);
+      doc.text("First", x + colWidths[0] + 1, y + 5);
+      
+      doc.rect(x + colWidths[0] + colWidths[1], y, colWidths[2], rowHeight);
+      doc.text("Second", x + colWidths[0] + colWidths[1] + 1, y + 5);
+      
+      return y + rowHeight;
+    };
+  
+    // Draw headers for all three tables
+    let headerY = drawTableHeader(leftX, y);
+    if (middleRows.length > 0) {
+      drawTableHeader(middleX, y);
+    }
+    if (rightRows.length > 0) {
+      drawTableHeader(rightX, y);
+    }
+  
+    // Synchronized drawing of all three tables
+    let currentY = headerY;
     doc.setFont("helvetica", "normal");
-
-    rows.forEach(([num, f, s]) => {
-      if (y > 280) {
+    doc.setFontSize(8);
+  
+    const maxRows = Math.max(leftRows.length, middleRows.length, rightRows.length);
+  
+    for (let i = 0; i < maxRows; i++) {
+      // Check if we need a new page
+      if (currentY > 280) {
         doc.addPage();
-        y = 20;
+        
+        // Add section header on new page
         doc.setFont("helvetica", "bold");
         doc.setFontSize(14);
-        doc.text(title + " (cont...)", 14, y);
-        y += 10;
-        doc.setFontSize(10);
-        doc.rect(x, y, colWidths[0], rowHeight);
-        doc.text("Number", x + 2, y + 6);
-        doc.rect(x + colWidths[0], y, colWidths[1], rowHeight);
-        doc.text("First", x + colWidths[0] + 2, y + 6);
-        doc.rect(x + colWidths[0] + colWidths[1], y, colWidths[2], rowHeight);
-        doc.text("Second", x + colWidths[0] + colWidths[1] + 2, y + 6);
-        y += rowHeight;
+        doc.text(title + " (continued...)", 14, 20);
+        
+        // Reset Y position and redraw ALL table headers
+        currentY = 35;
+        
+        // Draw headers for all three tables
+        drawTableHeader(leftX, currentY);
+        if (middleRows.length > 0) {
+          drawTableHeader(middleX, currentY);
+        }
+        if (rightRows.length > 0) {
+          drawTableHeader(rightX, currentY);
+        }
+        
+        currentY += rowHeight;
         doc.setFont("helvetica", "normal");
+        doc.setFontSize(8);
       }
+  
+      // Draw left table row
+      if (i < leftRows.length) {
+        const [num, f, s] = leftRows[i];
+        const entryColor = getEntryColor(num);
+        
+        doc.rect(leftX, currentY, colWidths[0], rowHeight);
+        doc.setTextColor(entryColor[0], entryColor[1], entryColor[2]);
+        doc.text(num.toString(), leftX + 1, currentY + 5);
 
-      doc.rect(x, y, colWidths[0], rowHeight);
-      doc.text(num.toString(), x + 2, y + 6);
-      doc.rect(x + colWidths[0], y, colWidths[1], rowHeight);
-      doc.text(f.toString(), x + colWidths[0] + 2, y + 6);
-      doc.rect(x + colWidths[0] + colWidths[1], y, colWidths[2], rowHeight);
-      doc.text(s.toString(), x + colWidths[0] + colWidths[1] + 2, y + 6);
-      y += rowHeight;
-    });
+        doc.rect(leftX + colWidths[0], currentY, colWidths[1], rowHeight);
+        doc.text(f.toString(), leftX + colWidths[0] + 1, currentY + 5);
+        doc.rect(leftX + colWidths[0] + colWidths[1], currentY, colWidths[2], rowHeight);
+        doc.text(s.toString(), leftX + colWidths[0] + colWidths[1] + 1, currentY + 5);
+        doc.setTextColor(0, 0, 0);
+      }
+  
+      // Draw middle table row
+      if (i < middleRows.length) {
+        const [num, f, s] = middleRows[i];
+        const entryColor = getEntryColor(num);
+        
+        doc.rect(middleX, currentY, colWidths[0], rowHeight);
+        doc.setTextColor(entryColor[0], entryColor[1], entryColor[2]);
+        doc.text(num.toString(), middleX + 1, currentY + 5);
 
-    return y + 10;
+        doc.rect(middleX + colWidths[0], currentY, colWidths[1], rowHeight);
+        doc.text(f.toString(), middleX + colWidths[0] + 1, currentY + 5);
+        doc.rect(middleX + colWidths[0] + colWidths[1], currentY, colWidths[2], rowHeight);
+        doc.text(s.toString(), middleX + colWidths[0] + colWidths[1] + 1, currentY + 5);
+        doc.setTextColor(0, 0, 0);
+      }
+  
+      // Draw right table row
+      if (i < rightRows.length) {
+        const [num, f, s] = rightRows[i];
+        const entryColor = getEntryColor(num);
+        
+        doc.rect(rightX, currentY, colWidths[0], rowHeight);
+        doc.setTextColor(entryColor[0], entryColor[1], entryColor[2]);
+        doc.text(num.toString(), rightX + 1, currentY + 5);
+
+        doc.rect(rightX + colWidths[0], currentY, colWidths[1], rowHeight);
+        doc.text(f.toString(), rightX + colWidths[0] + 1, currentY + 5);
+        doc.rect(rightX + colWidths[0] + colWidths[1], currentY, colWidths[2], rowHeight);
+        doc.text(s.toString(), rightX + colWidths[0] + colWidths[1] + 1, currentY + 5);
+        doc.setTextColor(0, 0, 0);
+      }
+  
+      currentY += rowHeight;
+    }
+  
+    return currentY + 10;
   };
 
   const renderGrandTotals = (startY = 270) => {
@@ -1078,11 +1548,11 @@ const Center = () => {
     const grandSecond = grandTotals.second;
     const netTotal = grandFirst + grandSecond;
 
-    const commissionFirst = (grandFirst / netTotal) * grandTotals.commission;
-    const commissionSecond = (grandSecond / netTotal) * grandTotals.commission;
+    // const commissionFirst = (grandFirst / netTotal) * grandTotals.commission;
+    // const commissionSecond = (grandSecond / netTotal) * grandTotals.commission;
 
-    const netFirst = grandFirst - commissionFirst;
-    const netSecond = grandSecond - commissionSecond;
+    // const netFirst = grandFirst - commissionFirst;
+    // const netSecond = grandSecond - commissionSecond;
 
     let y = startY;
 
@@ -1098,14 +1568,17 @@ const Center = () => {
 
     y += rowHeight;
     drawRow(y, "Grand Total", grandFirst, grandSecond, netTotal);
+    // y += rowHeight;
+    // drawRow(y, "Commission", -commissionFirst, -commissionSecond, -grandTotals.commission);
+    // y += rowHeight;
+    // drawRow(y, "Net Payable", netFirst, netSecond, grandTotals.payable);
     y += rowHeight;
-    drawRow(y, "Commission", -commissionFirst, -commissionSecond, -grandTotals.commission);
-    y += rowHeight;
-    drawRow(y, "Net Payable", netFirst, netSecond, grandTotals.payable);
+    drawRow(y, "Winning Amount", grandTotals.firstWinning, grandTotals.secondWinning, grandTotals.winningAmount);
   };
 
   addHeader();
-  let nextY = 70;
+  let nextY = 80;
+  nextY = renderSection("HINSA", hinsa, nextY);
   nextY = renderSection("AKRA", akra, nextY);
   nextY = renderSection("TANDOLA", tandola, nextY);
   nextY = renderSection("PANGORA", pangora, nextY);
@@ -1117,7 +1590,7 @@ const Center = () => {
 
   
 
-const generateDailyBillPDF = async () => {
+const generateDailyBillPDF2 = async () => {
   console.log("Generating Daily Bill PDF...");
 
   const fetchedEntries = await fetchVoucherData(drawDate, drawTime);
@@ -1199,13 +1672,178 @@ const generateDailyBillPDF = async () => {
 };
 
 
+const getEntryColor = (entryNumber) => {
+  // Check for exact match first
+  for (const winning of winningNumbers) {
+    if (entryNumber === winning.number) {
+      return winning.color;
+    }
+  }
 
+  // Check for positional matches with + symbols
+  for (const winning of winningNumbers) {
+    if (checkPositionalMatch(entryNumber, winning.number)) {
+      return winning.color;
+    }
+  }
 
+  return [0, 0, 0]; // Default black color
+};
+
+const checkPositionalMatch = (entry, winningNumber) => {
+  // Remove any spaces and ensure consistent format
+  const cleanEntry = entry.toString().trim();
   
+  // if (!cleanEntry.includes('+')) {
+  //   // For plain numbers, only check if they are exact substrings of winning number
+  //   // AND the entry has '+' patterns or is exactly the winning number
+  //   return false;
+  // }
+  // Handle patterns like +4+6, +34+, etc.
+  if (cleanEntry.includes('+')) {
+    // For 2-digit patterns like +4+6
+    if (cleanEntry.length === 4 && cleanEntry.match(/^\+\d\+\d$/)) {
+      const digit1 = cleanEntry[1]; // 4
+      const digit3 = cleanEntry[3]; // 6
+      
+      // Check if these digits match positions in winning number
+      if (winningNumber[1] === digit1 && winningNumber[3] === digit3) {
+        return true; // Matches positions 2 and 4 of 3456
+      }
+    }
+    
+    // For 3-digit patterns like +45+ (positions 2,3)
+    if (cleanEntry.length === 4 && cleanEntry.match(/^\+\d\d\+$/)) {
+      const digits = cleanEntry.slice(1, 3); // "45"
+      if (winningNumber.slice(1, 3) === digits) {
+        return true;
+      }
+    }
+    
+    // For patterns like 3+5+ (positions 1,3)
+    if (cleanEntry.length === 4 && cleanEntry.match(/^\d\+\d\+$/)) {
+      const digit1 = cleanEntry[0];
+      const digit3 = cleanEntry[2];
+      if (winningNumber[0] === digit1 && winningNumber[2] === digit3) {
+        return true;
+      }
+    }
+    
+    // For patterns like ++56 (last two positions)
+    if (cleanEntry.length === 4 && cleanEntry.match(/^\+\+\d\d$/)) {
+      const digits = cleanEntry.slice(2); // "56"
+      if (winningNumber.slice(2) === digits) {
+        return true;
+      }
+    }
+    
+    // For patterns like +76+ (checking if 76 appears in positions 2,3 of winning number)
+    if (cleanEntry.length === 4 && cleanEntry.match(/^\+\d\d\+$/)) {
+      const digits = cleanEntry.slice(1, 3); // "76"
+      if (winningNumber.slice(1, 3) === digits) {
+        return true;
+      }
+    }
+
+    // For patterns like 67+8 (checking consecutive positions)
+    if (cleanEntry.length === 4 && cleanEntry.match(/^\d\d\+\d$/)) {
+      const firstTwo = cleanEntry.slice(0, 2); // "67"
+      const lastDigit = cleanEntry[3]; // "8"
+      if (winningNumber.slice(0, 2) === firstTwo && winningNumber[3] === lastDigit) {
+        return true;
+      }
+    }
+
+    // For patterns like 6+68 (checking positions 1,3,4)
+    if (cleanEntry.length === 4 && cleanEntry.match(/^\d\+\d\d$/)) {
+      const firstDigit = cleanEntry[0]; // "6"
+      const lastTwo = cleanEntry.slice(2); // "68"
+      if (winningNumber[0] === firstDigit && winningNumber.slice(2) === lastTwo) {
+        return true;
+      }
+    }
+
+    // **NEW: For patterns like +990 (last 3 digits of 4-digit winning number)**
+    if (cleanEntry.length === 4 && cleanEntry.match(/^\+\d\d\d$/)) {
+      const lastThreeDigits = cleanEntry.slice(1); // "990"
+      if (winningNumber.slice(1) === lastThreeDigits) { // Check if 7990 ends with 990
+        return true;
+      }
+    }
+
+    // **NEW: For patterns like +99 (last 2 digits)**
+    if (cleanEntry.length === 3 && cleanEntry.match(/^\+\d\d$/)) {
+      const lastTwoDigits = cleanEntry.slice(1); // "99"
+      if (winningNumber.slice(-2) === lastTwoDigits) { // Check if 7990 ends with 99
+        return true;
+      }
+    }
+
+    // **NEW: For patterns like +9 (last digit)**
+    if (cleanEntry.length === 2 && cleanEntry.match(/^\+\d$/)) {
+      const lastDigit = cleanEntry.slice(1); // "9"
+      if (winningNumber.slice(-1) === lastDigit) { // Check if 7990 ends with 9
+        return true;
+      }
+    }
+
+    // Pattern: +8 (matches if 8 appears in position 2,3, or 4 of winning number)
+    if (cleanEntry.length === 2 && cleanEntry.match(/^\+\d$/)) {
+      const digit = cleanEntry[1];
+      // Check positions 2, 3, 4 (indices 1, 2, 3)
+      for (let i = 1; i < winningNumber.length; i++) {
+        if (winningNumber[i] === digit) {
+          return true;
+        }
+      }
+    }
+
+    // Pattern: ++8 (matches if 8 appears in position 3 or 4 of winning number)
+    if (cleanEntry.length === 3 && cleanEntry.match(/^\+\+\d$/)) {
+      const digit = cleanEntry[2];
+      // Check positions 3, 4 (indices 2, 3)
+      for (let i = 2; i < winningNumber.length; i++) {
+        if (winningNumber[i] === digit) {
+          return true;
+        }
+      }
+    }
+
+    // Pattern: +++8 (matches if 8 appears in position 4 of winning number)
+    if (cleanEntry.length === 4 && cleanEntry.match(/^\+\+\+\d$/)) {
+      const digit = cleanEntry[3];
+      // Check position 4 (index 3)
+      if (winningNumber[3] === digit) {
+        return true;
+      }
+    }
+  }
+  
+  
+  // Check for partial consecutive matches (like 45, 56, etc.)
+  if (cleanEntry.length >= 2 && cleanEntry.length <= 3 && /^\d+$/.test(cleanEntry)) {
+    // Only match if the entry starts from the beginning of the winning number
+    if (winningNumber.startsWith(cleanEntry)) {
+      return true;
+    }
+  }
+
+  // **NEW: For single digit numbers without + symbols**
+  // Pattern: 8 (matches if 8 appears in position 1 of winning number)
+  if (cleanEntry.length === 1 && /^\d$/.test(cleanEntry)) {
+    const digit = cleanEntry;
+    // Check if digit matches first position of winning number
+    if (winningNumber[0] === digit) {
+      return true;
+    }
+  }
+  
+  return false;
+};  
 
 
 
-    const handleDownloadPDF = async () => {
+const handleDownloadPDF = async () => {
       if (ledger === "VOUCHER") {
         await generateVoucherPDF();
       }
@@ -1223,7 +1861,287 @@ const generateDailyBillPDF = async () => {
       }
     
      
-    };
+};
+
+const generateDailyBillPDF = async () => {
+      console.log("Generating Daily Bill PDF...");
+    
+      const fetchedEntries = await fetchVoucherData(drawDate, drawTime);
+      if (!Array.isArray(fetchedEntries) || fetchedEntries.length === 0) {
+        toast.info("No record found for the selected date.");
+        return;
+      }
+    
+      const doc = new jsPDF("p", "mm", "a4");
+      const pageWidth = doc.internal.pageSize.width;
+    
+      // Header
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(18);
+      doc.text("Daily Bill", pageWidth / 2, 15, { align: "center" });
+    
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "normal");
+      doc.text(`Dealer: ${userData?.user.username}`, 14, 30);
+      doc.text(`City: ${userData?.user.city}`, 14, 40);
+      doc.text(`Date: ${drawDate}`, 14, 50);
+    
+      // Initialize grand totals for the day
+      const dayGrandTotals = {
+        first: 0,
+        second: 0,
+        net: 0,
+        winningAmount: 0,
+        firstWinning: 0,
+        secondWinning: 0,
+      };
+    
+      // Group by time slot
+      const groupedByTimeSlot = {};
+      fetchedEntries.forEach(entry => {
+        const slot = entry.timeSlot;
+        if (!groupedByTimeSlot[slot]) {
+          groupedByTimeSlot[slot] = [];
+        }
+        groupedByTimeSlot[slot].push(...entry.data);
+      });
+    
+      let y = 70;
+      const rowHeight = 10;
+      const colWidths = [40, 30, 30, 30, 30, 30];
+      const x = 14;
+    
+      // Enhanced Table Header
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      
+      // Draw header boxes
+      doc.rect(x, y, colWidths[0], rowHeight);
+      doc.text("Draw Time", x + 2, y + 7);
+      
+      doc.rect(x + colWidths[0], y, colWidths[1], rowHeight);
+      doc.text("SALE", x + colWidths[0] + 2, y + 7);
+      
+      doc.rect(x + colWidths[0] + colWidths[1], y, colWidths[2], rowHeight);
+      doc.text("PRIZE", x + colWidths[0] + colWidths[1] + 2, y + 7);
+      
+      doc.rect(x + colWidths[0] + colWidths[1] + colWidths[2], y, colWidths[3], rowHeight);
+      doc.text("SUB TOTAL", x + colWidths[0] + colWidths[1] + colWidths[2] + 2, y + 7);
+      
+      doc.rect(x + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3], y, colWidths[4], rowHeight);
+      doc.text("Share (45%)", x + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3] + 2, y + 7);
+
+      doc.rect(x + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3] + colWidths[4], y, colWidths[5], rowHeight);
+      doc.text("Bill", x + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3] + colWidths[4] + 2, y + 7);
+      
+      y += rowHeight;
+    
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+    
+      // Calculate winning amounts helper function
+      const calculateWinningForTimeSlot = (entries) => {
+        const allVoucherRows = entries.map(item => ({
+          number: item.uniqueId,
+          first: item.firstPrice,
+          second: item.secondPrice
+        }));
+    
+        const hinsa = [], akra = [], tandola = [], pangora = [];
+    
+        // Categorize entries
+        allVoucherRows.forEach(({ number, first, second }) => {
+          if (/^\d{1}$/.test(number)) {
+            hinsa.push([number, first, second]);
+          } else if (
+            /^\d{2}$/.test(number) ||
+            /^\+\d$/.test(number) ||
+            /^\+\+\d$/.test(number) ||
+            /^\+\+\+\d$/.test(number) ||
+            (number.includes('+') && number.length <= 4)
+          ) {
+            akra.push([number, first, second]);
+          } else if (
+            /^\d{3}$/.test(number) ||
+            (number.length === 4 && number.includes('x'))
+          ) {
+            tandola.push([number, first, second]);
+          } else if (/^\d{4}$/.test(number)) {
+            pangora.push([number, first, second]);
+          }
+        });
+    
+        // Calculate winning amounts for each category
+        const calculateSectionWinning = (rows, multiplier) => {
+          let firstWinningAmount = 0;
+          let secondWinningAmount = 0;
+    
+          rows.forEach(([num, f, s]) => {
+            const entryColor = getEntryColor(num);
+            
+            if (entryColor[0] !== 0 || entryColor[1] !== 0 || entryColor[2] !== 0) {
+              for (const winning of winningNumbers) {
+                if (num === winning.number || checkPositionalMatch(num, winning.number)) {
+                  if (winning.type === "first") {
+                    firstWinningAmount += f * multiplier;
+                  } else if (winning.type === "second" || winning.type === "third") {
+                    secondWinningAmount += (s * multiplier) / 3;
+                  }
+                  break;
+                }
+              }
+            }
+          });
+    
+          return firstWinningAmount + secondWinningAmount;
+        };
+    
+        const hinsaWinning = calculateSectionWinning(hinsa, 8);
+        const akraWinning = calculateSectionWinning(akra, 80);
+        const tandolaWinning = calculateSectionWinning(tandola, 800);
+        const pangoraWinning = calculateSectionWinning(pangora, 8000);
+    
+        return hinsaWinning + akraWinning + tandolaWinning + pangoraWinning;
+      };
+    
+      // Process each time slot
+      Object.entries(groupedByTimeSlot).forEach(([timeSlot, entries]) => {
+        const firstTotal = entries.reduce((sum, item) => sum + item.firstPrice, 0);
+        const secondTotal = entries.reduce((sum, item) => sum + item.secondPrice, 0);
+        const totalSale = firstTotal + secondTotal;
+        const winningAmount = calculateWinningForTimeSlot(entries);
+        const subtotal = totalSale - winningAmount;
+        const shareAmount = subtotal * 0.45; // 45% share amount
+        const billAmount = subtotal - shareAmount; // Bill amount after share deduction
+        // Add to day totals
+        dayGrandTotals.first += firstTotal;
+        dayGrandTotals.second += secondTotal;
+        dayGrandTotals.net += totalSale;
+        dayGrandTotals.winningAmount += winningAmount;
+    
+        // Draw row
+        doc.rect(x, y, colWidths[0], rowHeight);
+        doc.text(timeSlot, x + 2, y + 7);
+    
+        doc.rect(x + colWidths[0], y, colWidths[1], rowHeight);
+        doc.text(totalSale.toString(), x + colWidths[0] + 2, y + 7);
+    
+        doc.rect(x + colWidths[0] + colWidths[1], y, colWidths[2], rowHeight);
+        doc.text(winningAmount.toFixed(2), x + colWidths[0] + colWidths[1] + 2, y + 7);
+    
+        doc.rect(x + colWidths[0] + colWidths[1] + colWidths[2], y, colWidths[3], rowHeight);
+        doc.text(subtotal.toString(), x + colWidths[0] + colWidths[1] + colWidths[2] + 2, y + 7);
+    
+        doc.rect(x + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3], y, colWidths[4], rowHeight);
+        doc.text(shareAmount.toString(), x + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3] + 2, y + 7);
+
+        doc.rect(x + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3] + colWidths[4], y, colWidths[5], rowHeight);
+        doc.text(billAmount.toFixed(2), x + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3] + colWidths[4] + 2, y + 7);
+    
+        y += rowHeight;
+    
+        // if (y > 270) {
+        //   doc.addPage();
+        //   y = 30;
+          
+        //   // Redraw header on new page
+        //   doc.setFont("helvetica", "bold");
+        //   doc.setFontSize(10);
+          
+        //   doc.rect(x, y, colWidths[0], rowHeight);
+        //   doc.text("Draw Time", x + 2, y + 7);
+          
+        //   doc.rect(x + colWidths[0], y, colWidths[1], rowHeight);
+        //   doc.text("First", x + colWidths[0] + 2, y + 7);
+          
+        //   doc.rect(x + colWidths[0] + colWidths[1], y, colWidths[2], rowHeight);
+        //   doc.text("Second", x + colWidths[0] + colWidths[1] + 2, y + 7);
+          
+        //   doc.rect(x + colWidths[0] + colWidths[1] + colWidths[2], y, colWidths[3], rowHeight);
+        //   doc.text("Total Sale", x + colWidths[0] + colWidths[1] + colWidths[2] + 2, y + 7);
+          
+        //   doc.rect(x + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3], y, colWidths[4], rowHeight);
+        //   doc.text("Winning Amt", x + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3] + 2, y + 7);
+          
+        //   y += rowHeight;
+        //   doc.setFont("helvetica", "normal");
+        //   doc.setFontSize(9);
+        // }
+      });
+    
+      // Add Grand Totals Section
+      // y += 10;
+      
+      // if (y > 250) {
+      //   doc.addPage();
+      //   y = 30;
+      // }
+    
+      // doc.setFont("helvetica", "bold");
+      // doc.setFontSize(12);
+      // doc.text("Daily Grand Totals", 14, y);
+      // y += 10;
+    
+      // // Grand totals table
+      // const grandTotalRowHeight = 12;
+      
+      // // Header
+      // doc.setFont("helvetica", "bold");
+      // doc.setFontSize(10);
+      
+      // doc.rect(x, y, colWidths[0], grandTotalRowHeight);
+      // doc.text("Category", x + 2, y + 8);
+      
+      // doc.rect(x + colWidths[0], y, colWidths[1], grandTotalRowHeight);
+      // doc.text("First", x + colWidths[0] + 2, y + 8);
+      
+      // doc.rect(x + colWidths[0] + colWidths[1], y, colWidths[2], grandTotalRowHeight);
+      // doc.text("Second", x + colWidths[0] + colWidths[1] + 2, y + 8);
+      
+      // doc.rect(x + colWidths[0] + colWidths[1] + colWidths[2], y, colWidths[3], grandTotalRowHeight);
+      // doc.text("Total Sale", x + colWidths[0] + colWidths[1] + colWidths[2] + 2, y + 8);
+      
+      // doc.rect(x + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3], y, colWidths[4], grandTotalRowHeight);
+      // doc.text("Winning", x + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3] + 2, y + 8);
+      
+      // y += grandTotalRowHeight;
+    
+      // // Data rows
+      // doc.setFont("helvetica", "normal");
+      
+      // // Daily Totals
+      // doc.rect(x, y, colWidths[0], grandTotalRowHeight);
+      // doc.text("Daily Total", x + 2, y + 8);
+      
+      // doc.rect(x + colWidths[0], y, colWidths[1], grandTotalRowHeight);
+      // doc.text(dayGrandTotals.first.toString(), x + colWidths[0] + 2, y + 8);
+      
+      // doc.rect(x + colWidths[0] + colWidths[1], y, colWidths[2], grandTotalRowHeight);
+      // doc.text(dayGrandTotals.second.toString(), x + colWidths[0] + colWidths[1] + 2, y + 8);
+      
+      // doc.rect(x + colWidths[0] + colWidths[1] + colWidths[2], y, colWidths[3], grandTotalRowHeight);
+      // doc.text(dayGrandTotals.net.toString(), x + colWidths[0] + colWidths[1] + colWidths[2] + 2, y + 8);
+      
+      // doc.rect(x + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3], y, colWidths[4], grandTotalRowHeight);
+      // doc.text(dayGrandTotals.winningAmount.toFixed(2), x + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3] + 2, y + 8);
+      
+      // y += grandTotalRowHeight;
+    
+      // // Net Result (Sale - Winning)
+      // const netResult = dayGrandTotals.net - dayGrandTotals.winningAmount;
+      
+      // doc.setFont("helvetica", "bold");
+      // doc.rect(x, y, colWidths[0] + colWidths[1] + colWidths[2], grandTotalRowHeight);
+      // doc.text("Net Result (Sale - Winning):", x + 2, y + 8);
+      
+      // doc.rect(x + colWidths[0] + colWidths[1] + colWidths[2], y, colWidths[3] + colWidths[4], grandTotalRowHeight);
+      // doc.setTextColor(netResult >= 0 ? 0 : 255, netResult >= 0 ? 128 : 0, 0); // Green if positive, red if negative
+      // doc.text(netResult.toFixed(2), x + colWidths[0] + colWidths[1] + colWidths[2] + 2, y + 8);
+      // doc.setTextColor(0, 0, 0); // Reset to black
+    
+      doc.save("Daily_Bill_RLC.pdf");
+      toast.success("Daily Bill PDF downloaded successfully!");
+};
     
 
 

@@ -77,7 +77,7 @@ const Center = () => {
     { number: "1157", color: [0, 0, 255], type: "second" },   // Blue (RGB)
     { number: "2560", color: [0, 0, 255], type: "second" },   // Blue (RGB)
     { number: "8149", color: [0, 0, 255], type: "second" },   // Blue (RGB)
-    { number: "8440", color: [0, 0, 255], type: "third" }     // Blue (RGB)
+    { number: "8440", color: [0, 0, 255], type: "second" }     // Blue (RGB)
     
   ]);
 
@@ -87,6 +87,7 @@ const Center = () => {
   useEffect(() => {   // this iuse in table 
     if (drawDate && drawTime) {
       getAndSetVoucherData();
+      getWinningNumbers(drawDate, drawTime);  // Fetch winning numbers when date or time changes
     }
   }, [drawDate, drawTime]);
 
@@ -190,6 +191,40 @@ const Center = () => {
       return response.data.data;
     } catch (error) {
       toast.error((error.response?.data?.error));
+      return [];
+    }
+  };
+
+  const getWinningNumbers = async (date, time) => {
+
+    try {
+      const response = await axios.get("/api/v1/data/get-winning-numbers", {
+        params: {
+          date: date,
+          timeSlot: time,
+        },
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if(response.data || response.data.winningNumbers) {
+        const formattedNumbers = response.data.winningNumbers.map(item => ({
+          number: item.number,
+          type: item.type,
+          color: item.type === 'first' ? [255, 0, 0] : 
+                item.type === 'second' ? [0, 0, 255] : 
+                [128, 0, 128] // Purple for third
+        }));
+        setWinningNumbers(formattedNumbers);
+        return formattedNumbers
+      } else {
+        setWinningNumbers([]);
+        return [];
+      }
+    } catch (error) {
+      console.error("Error fetching winning numbers:", error);
+      // toast.error("Failed to fetch winning numbers");
+      setWinningNumbers([]);
       return [];
     }
   };
@@ -2350,8 +2385,14 @@ const generateDailyBillPDF = async () => {
         <div className='bg-gray-800 rounded-xl p-4 border border-gray-900' >
           <h1 className='text-2xl  text-center'>NOTIFATION</h1>
           Winning numbers
-          <h3>F:9876</h3>
-          <h3>S:2362, 7612, 8722,</h3>
+          {winningNumbers.map((item, index) => (
+            <div key={index} className='flex justify-between items-center text-lg font-semibold text-white mb-2'>
+              <span className='text-green-400'>{item.type.toUpperCase()}:</span>
+              <span className='text-yellow-400'>{item.number}</span>
+            </div>
+          ))}
+          {/* <h3>F:9876</h3>
+          <h3>S:2362, 7612, 8722,</h3> */}
         </div>
 
       </header>

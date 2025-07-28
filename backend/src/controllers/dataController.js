@@ -1,10 +1,33 @@
 import Data from "../models/Data.js";
+import User from "../models/User.js";
+import Winner from "../models/Winner.js";
 
 const addDataForTimeSlot = async (req, res) => {
     const { timeSlot, data } = req.body;
     try {
+        // Calculate total amount from firstPrice and secondPrice
+        const totalAmount = data.reduce((sum, item) => {
+            return sum + item.firstPrice + item.secondPrice;
+        }, 0);
+        // Find the user and check if they have sufficient balance
+        const user = await User.findById(req.user.id);
+        if (!user) {
+            return res.status(404).json({ error: "User not found" });
+        }
+
+        if (user.balance < totalAmount) {
+            return res.status(400).json({ 
+                error: "Insufficient balance", 
+                currentBalance: user.balance,
+                requiredAmount: totalAmount 
+            });
+        }
         const newData = new Data({ userId : req.user.id, timeSlot, data , date : new Date().toISOString().slice(0, 10) });
         await newData.save();
+        // Deduct the total amount from user's balance
+        user.balance -= totalAmount;
+        await user.save();
+        
         res.status(201).json({ message: "Data added successfully" , newData });
     } catch (error) {
         res.status(400).json({ error: error.message });
@@ -47,10 +70,30 @@ const deleteDataObjectById = async (req , res) => {
     }
 
     try {
-        const data = await Data.findByIdAndDelete(id);
+        const data = await Data.findById(id);
         if(!data){
             return res.status(404).json({ error: "No data associated to this id" });
         }
+        if (data.userId.toString() !== req.user.id) {
+            return res.status(403).json({ error: "Unauthorized: You can only delete your own data" });
+        }
+
+        const refundAmount = data.data.reduce((sum, item) => {
+            return sum + item.firstPrice + item.secondPrice;
+        }, 0);
+        console.log("Refund Amount: ", refundAmount);
+        // Find the user to refund the balance
+        const user = await User.findById(req.user.id);
+        if (!user) {
+            return res.status(404).json({ error: "User not found" });
+        }
+
+        // Delete the data
+        await Data.findByIdAndDelete(id);
+
+        // Refund the amount to user's balance
+        user.balance += refundAmount;
+        await user.save();
         return res.status(200).json({ message: "Data deleted successfully" });
     } catch (error) {
         return res.status(400).json({ error: error.message });
@@ -69,10 +112,68 @@ const getAllDocuments = async (req , res) => {
     }
 }
 
+const getWinningNumbers = async (req, res) => {
+    const { date, timeSlot } = req.query;
+    if (!date || !timeSlot) {
+        return res.status(400).json({ error: "Both date and timeSlot are required" });
+    }
+    try {
+        const data = await Winner.findOne({
+            date,
+            timeSlot,
+        });
+
+        if (!data) {
+            return res.status(404).json({ error: "No data found for the given date and timeSlot" });
+        }
+
+        // Assuming the winning numbers are stored in the WinningNumbers field
+        const winningNumbers = data.WinningNumbers.map(item => ({
+            number: item.number,
+            type: item.type
+        }));
+
+        res.status(200).json({ winningNumbers });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+}
+
+const setWinningNumbers = async (req, res) => {
+    const { date, timeSlot, winningNumbers } = req.body;
+    if (!date || !timeSlot || !winningNumbers || !Array.isArray(winningNumbers)) {
+        return res.status(400).json({ error: "Date, timeSlot, and winningNumbers are required" });
+    }
+    try {
+        // Check if winning numbers already exist for the given date and timeSlot
+        const existingWinner = await Winner.findOne({ date, timeSlot });
+        if (existingWinner) {
+            return res.status(400).json({ error: "Winning numbers already set for this date and timeSlot" });
+        }
+
+        const newWinner = new Winner({
+            userId: req.user.id,
+            date,
+            timeSlot,
+            WinningNumbers: winningNumbers.map(num => ({
+                number: num.number,
+                type: num.type
+            }))
+        });
+
+        await newWinner.save();
+        res.status(201).json({ message: "Winning numbers set successfully", newWinner });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+}
+
 export {
     addDataForTimeSlot,
     getDataForDate,
     deleteDataObjectById,
-    getAllDocuments
+    getAllDocuments,
+    getWinningNumbers,
+    setWinningNumbers
 }
 

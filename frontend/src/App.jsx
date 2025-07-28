@@ -23,6 +23,7 @@ import RoleBasedComponent from './components/RoleBasedRoute';
 import RoleProtectedRoute from './components/RoleProtectedRoute';
 import DistributerUsers from './pages/distributor/DistributerUsers';
 import DistributorCreateUser from './pages/distributor/DistributorCreateUser';
+import WinningNumbers from './pages/admin/WinningNumbers';
 
 // this is the routing setup 
 function App() {
@@ -93,6 +94,7 @@ function App() {
           <Route path="manage-users" element={<ManageUsers />} />
           <Route path="create-user" element={<CreateUser />} />
           <Route path="edit-user/:id" element={<EditUser />} />
+          <Route path="winning-numbers" element={<WinningNumbers/>} />
         </Route>
       </Routes>
 

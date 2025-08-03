@@ -8,6 +8,8 @@ import {
   deleteUser,
   updateUser,
   toggleUserActiveStatus,
+  getDistributorUsers,
+  createDistributorUser,
 } from "../controllers/userController.js";
 import {
   authMiddleware,
@@ -15,6 +17,9 @@ import {
 } from "../middlewares/authMiddleware.js";
 
 const router = express.Router();
+
+router.get("/distributor-users", authMiddleware, getDistributorUsers); // distributor can get all users created by him
+router.post("/distributor-create-user", authMiddleware, createDistributorUser);
 // users routes 
 router.get("/", authMiddleware, adminMiddleware, getAllUsers); // admin can get all users only 
 router.post("/create-user", authMiddleware, adminMiddleware, createUser); // admin can create the user only

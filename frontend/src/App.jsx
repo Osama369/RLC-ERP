@@ -1,13 +1,15 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';  // this is for routing 
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import Homepage from './pages/Homepage';
-// import Vouchersheet from './components/VoucherSheet';
 import Login from './pages/login';
 import Register from './pages/Register';
 
 import Dashboard from './pages/admin/Dashboard';
 import AdminLayout from './pages/admin/AdminLayout';
 import ManageUsers from './pages/admin/ManageUsers';
+import CreateUser from './pages/admin/CreateUser';
+import EditUser from './pages/admin/EditUser';
+
 import { useSelector } from 'react-redux';
 import Spinner from './components/Spinner';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -17,6 +19,11 @@ import AdminProtectedRoute from './components/AdminProtectedRoute';
 import AdminPublicRoute from './components/AdminPublicRoute';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
+import RoleBasedComponent from './components/RoleBasedRoute';
+import RoleProtectedRoute from './components/RoleProtectedRoute';
+import DistributerUsers from './pages/distributor/DistributerUsers';
+import DistributorCreateUser from './pages/distributor/DistributorCreateUser';
+import WinningNumbers from './pages/admin/WinningNumbers';
 
 // this is the routing setup 
 function App() {
@@ -51,6 +58,24 @@ function App() {
           </PublicRoute>
 
         }></Route>
+
+        {/* Distributor routes */}
+        <Route path="/manage-users" element={
+            <RoleProtectedRoute allowedRoles={['distributor']}>
+              <DistributerUsers />
+            </RoleProtectedRoute>
+        } />
+        <Route path="/create-user" element={
+            <RoleProtectedRoute allowedRoles={['distributor']}>
+              <DistributorCreateUser />
+            </RoleProtectedRoute>
+        } />
+        <Route path="/edit-user/:id" element={
+            <RoleProtectedRoute allowedRoles={['distributor']}>
+              <EditUser />
+            </RoleProtectedRoute>
+        } />
+
         <Route path="/admin-login" element={
           <AdminPublicRoute>
             <AdminLogin />
@@ -67,6 +92,9 @@ function App() {
         >
           <Route index element={<Dashboard />} />  {/* Default to Dashboard */}
           <Route path="manage-users" element={<ManageUsers />} />
+          <Route path="create-user" element={<CreateUser />} />
+          <Route path="edit-user/:id" element={<EditUser />} />
+          <Route path="winning-numbers" element={<WinningNumbers/>} />
         </Route>
       </Routes>
 

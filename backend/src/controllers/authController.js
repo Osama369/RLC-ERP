@@ -14,12 +14,15 @@ const register = async (req, res) => {
 
 const login = async (req, res) => {
   const { dealerId, password } = req.body;
+  console.log(dealerId, password);
   try {
     const user = await User.findOne({ dealerId });
+    console.log(user);
     if (!user) {
       return res.status(400).json({ error: 'Invalid credentials' });
     }
     const isMatch = await user.comparePassword(password);
+    console.log(isMatch);
     if (!isMatch) {
       return res.status(400).json({ error: 'Invalid credentials' });
     }
@@ -53,8 +56,28 @@ const adminLogin = async (req, res) => {  // this is the admin login
   }
 }
 
+const adminLogout = async (req, res) => {
+  try {
+    // Clear admin token cookie if using cookies
+    res.clearCookie('adminToken');
+    
+    return res.status(200).json({
+      success: true,
+      message: 'Admin logged out successfully',
+    });
+  } catch (error) {
+    console.error('Admin logout error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Error during logout process',
+      error: error.message,
+    });
+  }
+};
+
 export {
   adminLogin,
   register,
   login,
+  adminLogout
 }

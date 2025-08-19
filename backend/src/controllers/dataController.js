@@ -100,6 +100,75 @@ const deleteDataObjectById = async (req , res) => {
     }
 }
 
+// In your dataController.js
+const deleteIndividualEntries = async (req, res) => {
+    const { entryIds } = req.body; // Array of objectIds to delete
+    console.log("Entry IDs to delete:", entryIds);
+    console.log("User ID:", req.user.id);
+    if (!entryIds || !Array.isArray(entryIds)) {
+        return res.status(400).json({ error: "Entry IDs array is required" });
+    }
+
+    try {
+        let totalRefund = 0;
+        const deletedEntries = [];
+
+        // Process each entry ID
+        for (const entryId of entryIds) {
+            // Find the parent document containing this entry
+            const parentDocument = await Data.findOne({
+                "data._id": entryId,
+                userId: req.user.id
+            });
+
+            if (!parentDocument) {
+                continue; // Skip if not found or doesn't belong to user
+            }
+
+            // Find the specific entry to calculate refund
+            const entryToDelete = parentDocument.data.find(item => item._id.toString() === entryId);
+            if (entryToDelete) {
+                totalRefund += entryToDelete.firstPrice + entryToDelete.secondPrice;
+                deletedEntries.push(entryToDelete);
+            }
+
+            // Remove the entry from the data array
+            await Data.updateOne(
+                { _id: parentDocument._id },
+                { $pull: { data: { _id: entryId } } }
+            );
+
+            // Check if the document has no more entries, if so delete the whole document
+            const updatedDocument = await Data.findById(parentDocument._id);
+            if (updatedDocument.data.length === 0) {
+                await Data.findByIdAndDelete(parentDocument._id);
+            }
+        }
+
+        const user = await User.findById(req.user.id);
+        if (!user) {
+            return res.status(404).json({ error: "User not found" });
+        }
+
+        // Refund the balance to user
+        if (totalRefund > 0) {
+            user.balance += totalRefund;
+            await user.save();
+        }
+
+        return res.status(200).json({
+            message: "Selected entries deleted successfully",
+            deletedCount: deletedEntries.length,
+            refundAmount: totalRefund,
+            newBalance: user?.balance
+        });
+
+    } catch (error) {
+        console.error("Error deleting individual entries:", error);
+        return res.status(500).json({ error: error.message });
+    }
+};
+
 const getAllDocuments = async (req , res) => {
     try {
         const data = await Data.find();
@@ -174,6 +243,7 @@ export {
     deleteDataObjectById,
     getAllDocuments,
     getWinningNumbers,
-    setWinningNumbers
+    setWinningNumbers,
+    deleteIndividualEntries
 }
 

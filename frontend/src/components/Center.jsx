@@ -457,24 +457,24 @@ const Center = () => {
       toast.warning("No entries selected!");
       return;
     }
-
+    console.log(selectedEntries);
     try {
       const token = localStorage.getItem("token");
 
       // Loop through selected entries and delete them
-      for (const id of selectedEntries) {
-        await axios.delete(`/api/v1/data/delete-data/${id}`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-      }
+      await axios.delete(`/api/v1/data/delete-individual-entries`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        data: { entryIds: selectedEntries } // Send selected entries as data
+      });
 
       toast.success("Selected records deleted successfully");
 
       // Clear selection and refresh data
       setSelectedEntries([]);
       setSelectAll(false);
+      await fetchVoucherData();
       await getAndSetVoucherData();
     } catch (error) {
       console.error("Error deleting selected records:", error);

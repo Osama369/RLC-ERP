@@ -95,6 +95,9 @@ const Center = () => {
     lastSaveRef.current = null; // Reset behavior tracking when toggling
   };
 
+
+  
+
   const [ledger, setLedger] = useState("LEDGER");
   const [drawTime, setDrawTime] = useState("11 AM");  // time slot
   const [drawDate, setDrawDate] = useState(new Date().toISOString().split('T')[0]); // date
@@ -727,6 +730,18 @@ const Center = () => {
       return;
     }
 
+    // Auto-detect AKR to Tandula pattern
+  if (handleAKRtoTandula()) {
+    return; // Already handled
+  }
+
+
+  // Auto-detect AKR to Packet pattern
+  if (handleAKRtoPacket()) {
+    return; // Already handled
+  }
+
+
     const entry = {
       id: entries.length + 1,
       no,
@@ -860,6 +875,10 @@ const handle3FigurePaltiTandola = () => {
 
 
   const handleChakriRing = () => {
+     if (no.length !== 3 || !f || !s) {
+    toast.warning("Please enter exactly a 3-digit number and F/S values.");
+    return;
+  }
     if (no && f && s) {
       const generatedPermutations = getPermutations(no);  // Generates multiple numbers
 
@@ -885,6 +904,10 @@ const handle3FigurePaltiTandola = () => {
 
   // Handle Chakri Back Ring button click
   const handleChakriRingBack = () => {
+     if (no.length !== 3 || !f || !s) {
+    toast.warning("Please enter exactly a 3-digit number and F/S values.");
+    return;
+  }
     if (no && f && s) {
       const generatedPermutations = getPermutations(no);
       const updatedEntriesback = generatedPermutations.map((perm, index) => ({
@@ -906,6 +929,10 @@ const handle3FigurePaltiTandola = () => {
 
   // Handle Chakri Ring button click
   const handleChakriRingCross = () => {
+     if (no.length !== 3 || !f || !s) {
+    toast.warning("Please enter exactly a 3-digit number and F/S values.");
+    return;
+  }
     if (no && f && s) {
       const generatedPermutations = getPermutations(no);
       const updatedEntriescross = generatedPermutations.map((perm, index) => {
@@ -925,8 +952,12 @@ const handle3FigurePaltiTandola = () => {
     }
   };
 
-  // Handle Chakri Ring with double cross button click
+  // Handle Chakri Ring with double cross button click 
   const handleChakriRingDouble = () => {
+    if (no.length !== 3 || !f || !s) {
+    toast.warning("Please enter exactly a 3-digit number and F/S values.");
+    return;
+  }
     if (no && f && s) {
       const generatedPermutations = getPermutations(no);
       const updatedEntriesdouble = generatedPermutations.map((perm, index) => {
@@ -1059,6 +1090,83 @@ const handle3FigurePaltiTandola = () => {
       alert("Please enter exactly 3 digits and valid F/S values");
     }
   };
+
+ // ...existing code...
+
+const handleAKRtoTandula = () => {
+  // Find position of '+'
+  const plusIndex = no.indexOf('+');
+  // Only run if NO has one '+' and is 3 chars, and F is divisible by 10
+  if (
+    no.length === 3 &&
+    plusIndex !== -1 &&
+    !isNaN(Number(f)) &&
+    Number(f) % 10 === 0
+  ) {
+    const price = Number(f) / 10;
+    const generated = [];
+    for (let i = 0; i <= 9; i++) {
+      // Replace '+' with current digit
+      const newNo = no.slice(0, plusIndex) + i + no.slice(plusIndex + 1);
+      generated.push({
+        id: entries.length + generated.length + 1,
+        no: newNo,
+        f: price,
+        s: s,
+        selected: false,
+      });
+    }
+    addEntry(generated);
+    setNo("");
+    setF("");
+    setS("");
+    noInputRef.current?.focus();
+    return true; // handled
+  }
+  return false; // not handled
+};
+
+
+// ...existing code...
+
+const handleAKRtoPacket = () => {
+  // Only run if NO is '++NN', F and S are numbers
+  if (
+    no.length === 4 &&
+    no.startsWith('++') &&
+    /^\d{2}$/.test(no.slice(2)) &&
+    !isNaN(Number(f)) &&
+    !isNaN(Number(s))
+  ) {
+    const base = no.slice(2); // e.g., "10"
+    const priceF = Number(f) / 100;
+    const priceS = Number(s) / 100;
+    const generated = [];
+    for (let i = 0; i <= 99; i++) {
+      const prefix = i.toString().padStart(2, '0');
+      const newNo = `${prefix}${base}`;
+      generated.push({
+        id: entries.length + generated.length + 1,
+        no: newNo,
+        f: priceF,
+        s: priceS,
+        selected: false,
+      });
+    }
+    addEntry(generated);
+    setNo("");
+    setF("");
+    setS("");
+    noInputRef.current?.focus();
+    return true; // handled
+  }
+  return false; // not handled
+};
+
+
+
+
+
 
   const handlePacket = () => {
     // 

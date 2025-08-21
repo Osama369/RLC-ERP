@@ -1,7 +1,7 @@
 import React from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import Homepage from './pages/Homepage';
-import Login from './pages/login';
+import Login from './pages/Login';
 import Register from './pages/Register';
 
 import Dashboard from './pages/admin/Dashboard';
@@ -14,7 +14,7 @@ import { useSelector } from 'react-redux';
 import Spinner from './components/Spinner';
 import ProtectedRoute from './components/ProtectedRoute';
 import PublicRoute from './components/PublicRoute';
-import AdminLogin from './pages/admin/adminLogin';
+import AdminLogin from './pages/admin/AdminLogin';
 import AdminProtectedRoute from './components/AdminProtectedRoute';
 import AdminPublicRoute from './components/AdminPublicRoute';
 import { ToastContainer } from 'react-toastify';

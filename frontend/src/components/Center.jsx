@@ -67,6 +67,10 @@ const Center = () => {
   const handleNoKeyDown = (e) => {
     if (e.key === "Enter") {
       e.preventDefault();
+      if (!no) {
+        // toast.warning("Please enter NO before moving to the next input.");
+        return;
+      }
       if (autoMode) {
         handleSingleEntrySubmit(); // Auto Mode: Save immediately
       } else {
@@ -78,6 +82,10 @@ const Center = () => {
   const handleFKeyDown = (e) => {
     if (e.key === "Enter") {
       e.preventDefault();
+      if (!f) {
+        // toast.warning("Please enter F before moving to the next input.");
+        return;
+      }
       sInputRef.current?.focus(); // Go to S
     }
   };
@@ -85,7 +93,15 @@ const Center = () => {
   const handleSKeyDown = (e) => {
     if (e.key === "Enter") {
       e.preventDefault();
-      handleSingleEntrySubmit(); // Save when S is entered
+      if (autoMode) {
+        handleSingleEntrySubmit(); // Auto Mode: Save immediately
+      } else {
+        handleSingleEntrySubmit(); // Save entry in OFF mode
+        setNo("");
+        setF("");
+        setS("");
+        noInputRef.current?.focus(); // Move focus to NO
+      }
     }
   };
 
@@ -751,6 +767,7 @@ const Center = () => {
 
     // Reset NO always
     setNo("");
+   
 
     // Focus NO for next entry
     noInputRef.current?.focus();
@@ -765,6 +782,10 @@ const Center = () => {
 
 
   const handle4FigurePacket = () => {
+     if (isPastClosingTime(drawTime)) {
+      toast.warning("Draw time is closed. Cannot add entries.");
+      return;
+    }
     if (!no || no.length < 4 || !f || !s) {
       alert("Please enter at least a 4-digit number and F/S values.");
       return;
@@ -798,6 +819,10 @@ const Center = () => {
 
 
   const handlePaltiTandula = () => {
+    if (isPastClosingTime(drawTime)) {
+      toast.warning("Draw time is closed. Cannot add entries.");
+      return;
+    }
     if (!no || no.length < 4 || !f || !s) {
       alert("Please enter at least a 4-digit number and F/S values.");
       return;
@@ -828,6 +853,10 @@ const Center = () => {
 
   // 12 tandulla ring  3 figure ring
   const handle3FigureRingWithX = () => {
+     if (isPastClosingTime(drawTime)) {
+      toast.warning("Draw time is closed. Cannot add entries.");
+      return;
+    }
     if (no && f && s) {
       // Generate permutations with 'x' substitutions
       const generatedRingPermutations = generate3FigureRingWithX(no);
@@ -850,6 +879,10 @@ const Center = () => {
 
  // Handler using minimal permutations
 const handle3FigurePaltiTandola = () => {
+  if (isPastClosingTime(drawTime)) {
+    toast.warning("Draw time is closed. Cannot add entries.");
+    return;
+  }
   if (no && f && s) {
     // Generate minimal 3 permutations
     const generatedRingPermutations = generate3FigureMinimalPermutations(no);
@@ -872,13 +905,16 @@ const handle3FigurePaltiTandola = () => {
 
 
   const handleChakriRing = () => {
-     if (no.length !== 3 || !f || !s) {
-    toast.warning("Please enter exactly a 3-digit number and F/S values.");
-    return;
-  }
+    if (isPastClosingTime(drawTime)) {
+      toast.warning("Draw time is closed. Cannot add entries.");
+      return;
+    } 
+    if (no.length !== 3 || !f || !s) {
+      toast.warning("Please enter exactly a 3-digit number and F/S values.");
+      return;
+    }
     if (no && f && s) {
       const generatedPermutations = getPermutations(no);  // Generates multiple numbers
-
       // Create new entries for each permutation
       const updatedEntries = generatedPermutations.map((perm, index) => ({
         id: entries.length + index + 1, // Ensure unique IDs
@@ -888,12 +924,6 @@ const handle3FigurePaltiTandola = () => {
         selected: false
       }));
       console.log(updatedEntries);
-
-      // setEntries((prevEntries) => [...prevEntries, ...updatedEntries]);  // ✅ Append instead of replacing
-      // setTimeout (()=>{
-      //   addEntry();
-      // }, 0);
-      //  addEntry(); // Call addEntry with the new entries
       addEntry(updatedEntries); // Pass the new entries to addEntry
     }
   };
@@ -901,6 +931,10 @@ const handle3FigurePaltiTandola = () => {
 
   // Handle Chakri Back Ring button click
   const handleChakriRingBack = () => {
+     if (isPastClosingTime(drawTime)) {
+      toast.warning("Draw time is closed. Cannot add entries.");
+      return;
+    } 
      if (no.length !== 3 || !f || !s) {
     toast.warning("Please enter exactly a 3-digit number and F/S values.");
     return;
@@ -926,6 +960,10 @@ const handle3FigurePaltiTandola = () => {
 
   // Handle Chakri Ring button click
   const handleChakriRingCross = () => {
+     if (isPastClosingTime(drawTime)) {
+      toast.warning("Draw time is closed. Cannot add entries.");
+      return;
+    } 
      if (no.length !== 3 || !f || !s) {
     toast.warning("Please enter exactly a 3-digit number and F/S values.");
     return;
@@ -951,6 +989,10 @@ const handle3FigurePaltiTandola = () => {
 
   // Handle Chakri Ring with double cross button click 
   const handleChakriRingDouble = () => {
+     if (isPastClosingTime(drawTime)) {
+      toast.warning("Draw time is closed. Cannot add entries.");
+      return;
+    } 
     if (no.length !== 3 || !f || !s) {
     toast.warning("Please enter exactly a 3-digit number and F/S values.");
     return;
@@ -977,6 +1019,10 @@ const handle3FigurePaltiTandola = () => {
   // function to AKR 2 figure 
 
   const handleAKR2Figure = () => {
+     if (isPastClosingTime(drawTime)) {
+      toast.warning("Draw time is closed. Cannot add entries.");
+      return;
+    } 
     if (no.length !== 2 || !f || !s) {
       console.log("Please enter a 2-digit number and prices.");
       return;
@@ -1007,6 +1053,10 @@ const handle3FigurePaltiTandola = () => {
 
    // hanble AKR 2 figure 3 jaga
   const handleAKR2Figure3Jaga = () => {
+     if (isPastClosingTime(drawTime)) {
+      toast.warning("Draw time is closed. Cannot add entries.");
+      return;
+    } 
  if (no.length !== 2 || !f || !s) {
       console.log("Please enter a 2-digit number and prices.");
       return;
@@ -1038,6 +1088,10 @@ const handle3FigurePaltiTandola = () => {
 
 
   const handlePaltiAKR = () => {
+     if (isPastClosingTime(drawTime)) {
+      toast.warning("Draw time is closed. Cannot add entries.");
+      return;
+    } 
     if (!f || !s) {
       alert("Please enter valid F/S values.");
       return;
@@ -1065,6 +1119,10 @@ const handle3FigurePaltiTandola = () => {
 
 
   const handleRingPlusAKR = () => {
+    if (isPastClosingTime(drawTime)) {
+      toast.warning("Draw time is closed. Cannot add entries.");
+      return;
+    }
     if (no.length === 3 && f && s) {
       const threeDigit = {
         id: entries.length + 1,
@@ -1082,15 +1140,19 @@ const handle3FigurePaltiTandola = () => {
         selected: false,
       };
 
-      setEntries(prev => [...prev, threeDigit, twoDigit]);
+      addEntry([threeDigit, twoDigit]);
     } else {
-      alert("Please enter exactly 3 digits and valid F/S values");
+      toast.warning("Please enter exactly 3 digits and valid F/S values");
     }
   };
 
- // ...existing code...
+
 
 const handleAKRtoTandula = () => {
+  if (isPastClosingTime(drawTime)) {
+    toast.warning("Draw time is closed. Cannot add entries.");
+    return false;
+  }
   // Find position of '+'
   const plusIndex = no.indexOf('+');
   // Only run if NO has one '+' and is 3 chars, and F is divisible by 10
@@ -1127,6 +1189,10 @@ const handleAKRtoTandula = () => {
 // ...existing code...
 
 const handleAKRtoPacket = () => {
+    if (isPastClosingTime(drawTime)) {
+    toast.warning("Draw time is closed. Cannot add entries.");
+    return false;
+  }
   // Only run if NO is '++NN', F and S are numbers
   if (
     no.length === 4 &&
@@ -2782,13 +2848,13 @@ const handleAKRtoPacket = () => {
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center space-x-3">
               {/* Select All Checkbox */}
-              <input
+              {/* <input
                 type="checkbox"
                 checked={selectAll}
                 onChange={toggleSelectAll}
                 className="w-4 h-4"
               />
-              <span className="text-sm">Select All</span>
+              <span className="text-sm">Select All</span> */}
 
               {/* Delete Selected Button */}
               <button
@@ -2833,58 +2899,80 @@ const handleAKRtoPacket = () => {
           </div>
 
           {entries.length === 0 && (
-            <div className='text-center text-white-500'>No record found</div>
+            <div className='text-center text-white-500'>No data found</div>
           )}
 
-          <div className='max-h-80 border rounded-md overflow-y-auto'>
-            {Object.entries(groupedEntries).map(([parentId, group]) => (
-              <div key={parentId} className="mb-4 border rounded p-3">
-                <div className="flex justify-between items-center mb-2">
-                  {/* <h2 className="font-semibold text-lg">Document ID: {parentId}</h2> */}
-                  <button
-                    onClick={() => handleDeleteRecord(parentId)}
-                    className="bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600 "
-                  >
-                    Delete
-                  </button>
-                </div>
+       <div className="max-h-80 overflow-y-auto">
+  <table className="min-w-full text-sm text-left">
+    <thead>
+      <tr>
+        <th className="px-3 py-2 w-10">
+          {/* ✅ Select all checkbox (optional) */}
+          <input
+            type="checkbox"
+            checked={
+              Object.values(groupedEntries)
+                .flat()
+                .every(entry => selectedEntries.includes(entry.objectId || entry.id))
+            }
+            onChange={(e) => {
+              if (e.target.checked) {
+                const allIds = Object.values(groupedEntries).flat().map(entry => entry.objectId || entry.id);
+                setSelectedEntries(allIds);
+              } else {
+                setSelectedEntries([]);
+              }
+            }}
+          />
+        </th>
+        <th className="px-3 py-2">NO</th>
+        <th className="px-3 py-2">F</th>
+        <th className="px-3 py-2">S</th>
+        <th className="px-3 py-2">Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {Object.entries(groupedEntries).map(([parentId, group]) =>
+        group.map((entry, index) => (
+          <tr key={entry.objectId || entry.id}>
+            {/* ✅ Checkbox for each row */}
+            <td className="px-3 py-2">
+              <input
+                type="checkbox"
+                checked={selectedEntries.includes(entry.objectId || entry.id)}
+                onChange={() => toggleSelectEntry(entry.objectId || entry.id)}
+                className="w-4 h-4"
+              />
+            </td>
 
-                <table className="w-full border-collapse border border-gray-900 text-sm">
-                  {/* Header Actions: Select All + Delete Selected */}
+            <td className="px-3 py-2">{entry.no}</td>
+            <td className="px-3 py-2">{entry.f}</td>
+            <td className="px-3 py-2">{entry.s}</td>
+
+            {/* ✅ Sirf ek row ke liye delete button (rowSpan ke sath) */}
+            {index === 0 ? (
+              <td
+                className="px-3 py-2"
+                rowSpan={group.length}
+              >
+                <button
+                  onClick={() => handleDeleteRecord(parentId)}
+                  className="bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600"
+                >
+                  Delete
+                </button>
+              </td>
+            ) : null}
+          </tr>
+        ))
+      )}
+    </tbody>
+  </table>
+</div>
 
 
-                  <thead>
-                    <tr className="bg-gray-400">
-                      {/* <th className="border px-3 py-2">#</th> */}
-                      <th className="border px-3 py-2 w-10"></th> {/* For row checkboxes */}
-                      <th className="border px-3 py-2">NO</th>
-                      <th className="border px-3 py-2">First Price</th>
-                      <th className="border px-3 py-2">Second Price</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {group.map((entry, index) => (
-                      <tr key={index} className="text-center">
-                        <td className="border px-3 py-2">
-                          <input
-                            type="checkbox"
-                            checked={selectedEntries.includes(entry.objectId || entry.id)}
-                            onChange={() => toggleSelectEntry(entry.objectId || entry.id)}
-                            className="w-4 h-4"
-                          />
-                        </td>
-                        <td className="border px-3 py-2">{entry.no}</td>
-                        <td className="border px-3 py-2">{entry.f}</td>
-                        <td className="border px-3 py-2">{entry.s}</td>
-                      </tr>
-                    ))}
-                  </tbody>
 
-                </table>
-              </div>
-            ))}
 
-          </div>
 
           {/* Input Fields - Fixed at the Bottom */}
           <form

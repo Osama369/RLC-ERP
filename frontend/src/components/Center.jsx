@@ -141,6 +141,9 @@ const Center = () => {
     { number: "8440", color: [0, 0, 255], type: "second" }     // Blue (RGB)
 
   ]);
+  const [firstPrizeLimit, setFirstPrizeLimit] = useState(800);
+  const [secondPrizeLimit, setSecondPrizeLimit] = useState(0);
+  const [enablePrizeFilter, setEnablePrizeFilter] = useState(true);
 
   // pasr sms function
   const parseSMS = (sms) => {
@@ -1248,13 +1251,35 @@ const handleAKRtoPacket = () => {
     const pageWidth = doc.internal.pageSize.width;
     const pageHeight = doc.internal.pageSize.height;
 
-    const allVoucherRows = fetchedEntries
-      .filter(entry => entry.timeSlot === drawTime)
+    let allVoucherRows = fetchedEntries
+      .filter(entry => entry.timeSlot === drawTime) // Filter entries based on time and prize limits
       .flatMap(entry => entry.data.map(item => [
         item.uniqueId,
         item.firstPrice,
         item.secondPrice
       ]));
+    
+    if (enablePrizeFilter) {
+        const originalCount = allVoucherRows.length;
+        
+        allVoucherRows = allVoucherRows.filter(([uniqueId, firstPrice, secondPrice]) => {
+          const firstPrizeCheck = firstPrizeLimit === 0 || firstPrice < firstPrizeLimit;
+          const secondPrizeCheck = secondPrizeLimit === 0 || secondPrice < secondPrizeLimit;
+          return firstPrizeCheck && secondPrizeCheck;
+        });
+    
+        const filteredCount = allVoucherRows.length;
+        const excludedCount = originalCount - filteredCount;
+        
+        if (excludedCount > 0) {
+          toast.info(`${excludedCount} entries excluded due to prize limits. Showing ${filteredCount} entries.`);
+        }
+        
+        if (filteredCount === 0) {
+          toast.warning("No entries match the prize filter criteria.");
+          return;
+        }
+    }
 
     const totalEntries = allVoucherRows.length;
 
@@ -1369,6 +1394,244 @@ const handleAKRtoPacket = () => {
     toast.success("Voucher PDF downloaded successfully!");
 
   }
+
+  const generateOverLimitPDF = async () => {
+    const fetchedEntries = await fetchVoucherData(drawDate, drawTime);
+    if (fetchedEntries.length === 0) {
+      toast.info("No Record found..");
+      return;
+    }
+  
+    const doc = new jsPDF("p", "mm", "a4");
+    const pageWidth = doc.internal.pageSize.width;
+    const pageHeight = doc.internal.pageSize.height;
+  
+    let allVoucherRows = fetchedEntries
+      .filter(entry => entry.timeSlot === drawTime)
+      .flatMap(entry => entry.data.map(item => [
+        item.uniqueId,
+        item.firstPrice,
+        item.secondPrice
+      ]));
+  
+    // Filter entries that EXCEED the limits (opposite of prize filter)
+    if (enablePrizeFilter && (firstPrizeLimit > 0 || secondPrizeLimit > 0)) {
+      const originalCount = allVoucherRows.length;
+      
+      allVoucherRows = allVoucherRows.filter(([uniqueId, firstPrice, secondPrice]) => {
+        const firstPrizeExceeds = firstPrizeLimit > 0 && firstPrice >= firstPrizeLimit;
+        const secondPrizeExceeds = secondPrizeLimit > 0 && secondPrice >= secondPrizeLimit;
+        // Return true if ANY prize exceeds its limit
+        return firstPrizeExceeds || secondPrizeExceeds;
+      });
+  
+      const overLimitCount = allVoucherRows.length;
+      const withinLimitCount = originalCount - overLimitCount;
+      
+      if (overLimitCount === 0) {
+        toast.info("No entries exceed the set prize limits.");
+        return;
+      }
+      
+      toast.info(`${overLimitCount} entries exceed limits. ${withinLimitCount} entries are within limits.`);
+    } else {
+      toast.warning("Please enable prize filter and set limits to generate over limit report.");
+      return;
+    }
+  
+    const totalEntries = allVoucherRows.length;
+  
+    // Calculate totals
+    const totals = allVoucherRows.reduce(
+      (acc, row) => {
+        acc.firstTotal += row[1];
+        acc.secondTotal += row[2];
+        return acc;
+      },
+      { firstTotal: 0, secondTotal: 0 }
+    );
+    const grandTotal = totals.firstTotal + totals.secondTotal;
+  
+    const addHeader = () => {
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(18);
+      doc.text("Over Limit Report", pageWidth / 2, 15, { align: "center" });
+  
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "normal");
+      doc.text(`Dealer Name: ${userData?.user.username}`, 14, 30);
+      doc.text(`City: ${userData?.user.city}`, 14, 40);
+      doc.text(`Draw Date: ${drawDate}`, 14, 50);
+      doc.text(`Draw Time: ${drawTime}`, 14, 60);
+      doc.text(`Over Limit Entries: ${totalEntries}`, 14, 70);
+  
+      // Add limit information
+      // doc.setFontSize(10);
+      // doc.setTextColor(255, 0, 0); // Red color for limit info
+      // let limitText = "Limits Set: ";
+      // if (firstPrizeLimit > 0) limitText += `First ≥ ${firstPrizeLimit}`;
+      // if (firstPrizeLimit > 0 && secondPrizeLimit > 0) limitText += ", ";
+      // if (secondPrizeLimit > 0) limitText += `Second ≥ ${secondPrizeLimit}`;
+      
+      // doc.text(limitText, 14, 80);
+      // doc.setTextColor(0, 0, 0); // Reset to black
+      // doc.setFontSize(12);
+  
+      // Add totals
+      doc.text(`First Total: ${totals.firstTotal}`, 110, 50);
+      doc.text(`Second Total: ${totals.secondTotal}`, 110, 60);
+      doc.text(`Grand Total: ${grandTotal}`, 110, 70);
+    };
+  
+    addHeader();
+  
+    let startY = 90; // Start after limit information
+    let rowHeight = 7;
+    const colWidths = [20, 15, 15, 15]; // Added extra column for "Exceeds" indicator
+    const tableWidth = colWidths.reduce((a, b) => a + b, 0);
+    const gapBetweenTables = 8;
+    const xStart = 14;
+  
+    // Set manual 3 columns
+    const xOffsets = [];
+    for (let i = 0; i < 3; i++) {
+      xOffsets.push(xStart + i * (tableWidth + gapBetweenTables));
+    }
+  
+    let currentXIndex = 0;
+    let currentY = startY;
+  
+    const printTableHeader = (x, y) => {
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+  
+      doc.rect(x, y, colWidths[0], rowHeight);
+      doc.text("Number", x + 2, y + 5);
+  
+      doc.rect(x + colWidths[0], y, colWidths[1], rowHeight);
+      doc.text("First", x + colWidths[0] + 2, y + 5);
+  
+      doc.rect(x + colWidths[0] + colWidths[1], y, colWidths[2], rowHeight);
+      doc.text("Second", x + colWidths[0] + colWidths[1] + 2, y + 5);
+  
+      // doc.rect(x + colWidths[0] + colWidths[1] + colWidths[2], y, colWidths[3], rowHeight);
+      // doc.text("Exceeds", x + colWidths[0] + colWidths[1] + colWidths[2] + 2, y + 5);
+  
+      doc.setFont("helvetica", "normal");
+    };
+  
+    // Print the first table header
+    printTableHeader(xOffsets[currentXIndex], currentY);
+    currentY += rowHeight;
+  
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+  
+    allVoucherRows.forEach((row) => {
+      const [number, first, second] = row;
+      let x = xOffsets[currentXIndex];
+  
+      // Determine what exceeds
+      let exceedsText = "";
+      const firstExceeds = firstPrizeLimit > 0 && first >= firstPrizeLimit;
+      const secondExceeds = secondPrizeLimit > 0 && second >= secondPrizeLimit;
+      
+      if (firstExceeds && secondExceeds) {
+        exceedsText = "F+S";
+      } else if (firstExceeds) {
+        exceedsText = "F";
+      } else if (secondExceeds) {
+        exceedsText = "S";
+      }
+  
+      // Draw cells with highlighting for exceeded values
+      doc.rect(x, currentY, colWidths[0], rowHeight);
+      doc.text(number.toString(), x + 2, currentY + 5);
+  
+      // Highlight first price if it exceeds limit
+      doc.rect(x + colWidths[0], currentY, colWidths[1], rowHeight);
+      if (firstExceeds) {
+        doc.setTextColor(255, 0, 0); // Red for exceeded values
+        doc.text(first.toString(), x + colWidths[0] + 2, currentY + 5);
+        doc.setTextColor(0, 0, 0); // Reset to black
+      } else {
+        doc.text(first.toString(), x + colWidths[0] + 2, currentY + 5);
+      }
+  
+      // Highlight second price if it exceeds limit
+      doc.rect(x + colWidths[0] + colWidths[1], currentY, colWidths[2], rowHeight);
+      if (secondExceeds) {
+        doc.setTextColor(255, 0, 0); // Red for exceeded values
+        doc.text(second.toString(), x + colWidths[0] + colWidths[1] + 2, currentY + 5);
+        doc.setTextColor(0, 0, 0); // Reset to black
+      } else {
+        doc.text(second.toString(), x + colWidths[0] + colWidths[1] + 2, currentY + 5);
+      }
+  
+      // Exceeds indicator column
+      // doc.rect(x + colWidths[0] + colWidths[1] + colWidths[2], currentY, colWidths[3], rowHeight);
+      // doc.setTextColor(255, 0, 0); // Red for indicator
+      // doc.text(exceedsText, x + colWidths[0] + colWidths[1] + colWidths[2] + 2, currentY + 5);
+      // doc.setTextColor(0, 0, 0); // Reset to black
+  
+      currentY += rowHeight;
+  
+      if (currentY > pageHeight - 20) {
+        // Reached bottom of page
+        currentY = startY;
+        currentXIndex++;
+  
+        if (currentXIndex >= xOffsets.length) {
+          // All columns filled, create new page
+          doc.addPage();
+          currentXIndex = 0;
+          currentY = startY;
+        }
+  
+        // After new column or page, print new table header
+        printTableHeader(xOffsets[currentXIndex], currentY);
+        currentY += rowHeight;
+      }
+    });
+  
+    // Add summary at the end
+    if (currentY > pageHeight - 40) {
+      doc.addPage();
+      currentY = 20;
+    }
+  
+    // currentY += 10;
+    // doc.setFont("helvetica", "bold");
+    // doc.setFontSize(12);
+    // doc.text("Over Limit Summary", 14, currentY);
+    // currentY += 10;
+  
+    // doc.setFont("helvetica", "normal");
+    // doc.setFontSize(10);
+    
+    // const firstExceedCount = allVoucherRows.filter(([, first]) => 
+    //   firstPrizeLimit > 0 && first >= firstPrizeLimit).length;
+    // const secondExceedCount = allVoucherRows.filter(([, , second]) => 
+    //   secondPrizeLimit > 0 && second >= secondPrizeLimit).length;
+  
+    // doc.text(`Total entries exceeding limits: ${totalEntries}`, 14, currentY);
+    // currentY += 6;
+    
+    // if (firstPrizeLimit > 0) {
+    //   doc.text(`Entries with First Prize ≥ ${firstPrizeLimit}: ${firstExceedCount}`, 14, currentY);
+    //   currentY += 6;
+    // }
+    
+    // if (secondPrizeLimit > 0) {
+    //   doc.text(`Entries with Second Prize ≥ ${secondPrizeLimit}: ${secondExceedCount}`, 14, currentY);
+    //   currentY += 6;
+    // }
+  
+    // doc.text(`Total amount in over limit entries: ${grandTotal}`, 14, currentY);
+  
+    doc.save("Over_Limit_Report_RLC.pdf");
+    toast.success("Over Limit Report PDF downloaded successfully!");
+  };  
 
   const generateLedgerPDF = async () => {
     // console.log("Generating Ledger PDF...");
@@ -2329,6 +2592,9 @@ const handleAKRtoPacket = () => {
     else if (ledger === "DAILY BILL") {
       await generateDailyBillPDF();
     }
+    else if(ledger === "OVER LIMIT"){
+      await generateOverLimitPDF();
+    }
     else {
       toast.error("Please select a valid ledger type.");
 
@@ -2716,8 +2982,51 @@ const handleAKRtoPacket = () => {
               <option>LEDGER</option>
               <option>DAILY BILL</option>
               <option>VOUCHER</option>
+              <option>OVER LIMIT</option>
             </select>
           </div>
+
+          {/* Prize Filter Toggle */}
+          <div className="text-lg font-semibold flex items-center space-x-2">
+            <input
+              type="checkbox"
+              checked={enablePrizeFilter}
+              onChange={(e) => setEnablePrizeFilter(e.target.checked)}
+              className="w-4 h-4"
+            />
+            <span>Enable Prize Filter</span>
+          </div>
+
+          {/* Prize Limit Inputs - Only show when filter is enabled */}
+          {enablePrizeFilter && (
+            <div className="space-y-2 bg-gray-700 p-3 rounded-lg border border-gray-600">
+              <div className="flex items-center space-x-2">
+                <label className="text-sm font-medium min-w-[100px]">First Prize Limit:</label>
+                <input
+                  type="number"
+                  value={firstPrizeLimit}
+                  onChange={(e) => setFirstPrizeLimit(Number(e.target.value))}
+                  className="bg-gray-600 text-white px-2 py-1 rounded border border-gray-500 flex-1"
+                  placeholder="Enter limit"
+                  min="0"
+                />
+              </div>
+              <div className="flex items-center space-x-2">
+                <label className="text-sm font-medium min-w-[100px]">Second Prize Limit:</label>
+                <input
+                  type="number"
+                  value={secondPrizeLimit}
+                  onChange={(e) => setSecondPrizeLimit(Number(e.target.value))}
+                  className="bg-gray-600 text-white px-2 py-1 rounded border border-gray-500 flex-1"
+                  placeholder="Enter limit"
+                  min="0"
+                />
+              </div>
+              <div className="text-xs text-gray-400">
+                * Only entries with prizes below these limits will be included
+              </div>
+            </div>
+          )}
 
           {/* Draw Name Dropdown */}
           <div className="text-lg font-semibold flex items-center space-x-2">

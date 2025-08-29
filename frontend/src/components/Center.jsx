@@ -125,7 +125,7 @@ const Center = () => {
     { number: "8440", color: [0, 0, 255], type: "second" }     // Blue (RGB)
 
   ]);
-  const [firstPrizeLimit, setFirstPrizeLimit] = useState(800);
+  const [firstPrizeLimit, setFirstPrizeLimit] = useState(0);
   const [secondPrizeLimit, setSecondPrizeLimit] = useState(0);
   const [enablePrizeFilter, setEnablePrizeFilter] = useState(true);
 
@@ -329,7 +329,7 @@ const Center = () => {
 
   //  get the data from the backend on specific date and time slot
 
-  const fetchVoucherData = async (selectedDate, selectedTimeSlot) => {
+  const fetchVoucherData = async (selectedDate, selectedTimeSlot, category = "general") => {
     try {
       const token = localStorage.getItem("token");
 
@@ -337,6 +337,7 @@ const Center = () => {
         params: {
           date: selectedDate,
           timeSlot: selectedTimeSlot,
+          category: category,
         },
         headers: {
           Authorization: `Bearer ${token}`,
@@ -1172,10 +1173,76 @@ const handleAKRtoPacket = () => {
     // 
   }
 
-  // 1. generate voucher pdf 
-  const generateVoucherPDF = async () => {
+  function splitEntriesByLimit(entries, firstLimit, secondLimit) {
+    const demand = [];
+    const overlimit = [];
+  
+    entries.forEach(entry => {
+      const demandFirst = firstLimit > 0 ? Math.min(entry.f, firstLimit) : entry.f;
+      const demandSecond = secondLimit > 0 ? Math.min(entry.s, secondLimit) : entry.s;
+      // const overFirst = entry.f > firstLimit ? entry.f - firstLimit : 0;
+      // const overSecond = entry.s > secondLimit ? entry.s - secondLimit : 0;
+  
+      if (demandFirst > 0 || demandSecond > 0) {
+        demand.push({
+          uniqueId: entry.no,
+          firstPrice: demandFirst,
+          secondPrice: demandSecond
+        });
+      }
+      if ((firstLimit > 0 && entry.f > firstLimit) || (secondLimit > 0 && entry.s > secondLimit)) {
+        overlimit.push({
+          uniqueId: entry.no,
+          firstPrice: entry.f > firstLimit ? entry.f - firstLimit : 0,
+          secondPrice: entry.s > secondLimit ? entry.s - secondLimit : 0
+        });
+      }
+    });
+  
+    return { demand, overlimit };
+  }
+  
+  const saveOverLimit = async () => {
+    try {
+      const { demand, overlimit } = splitEntriesByLimit(entries, firstPrizeLimit, secondPrizeLimit);
+      console.log("Demand Entries:", demand);
+      console.log("Overlimit Entries:", overlimit);
+      const token = localStorage.getItem("token");
+  
+      // Save demand entries
+      if (demand.length > 0) {
+        await axios.post("/api/v1/data/add-overlimit-data", {
+          timeSlot: drawTime,
+          data: demand,
+          category: "demand"
+        }, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      }
+  
+      // Save overlimit entries
+      if (overlimit.length > 0) {
+        await axios.post("/api/v1/data/add-overlimit-data", {
+          timeSlot: drawTime,
+          data: overlimit,
+          category: "overlimit"
+        }, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      }
+  
+      toast.success("Demand and Overlimit entries saved!");
+      await getAndSetVoucherData();
+    } catch (error) {
+      console.error("Error saving over limit:", error);
+      toast.error("Failed to save overlimit/demand entries");
+    }
+  };
 
-    const fetchedEntries = await fetchVoucherData(drawDate, drawTime);
+  // 1. generate voucher pdf 
+  const generateVoucherPDF = async (category) => {
+
+    const fetchedEntries = await fetchVoucherData(drawDate, drawTime, category);
     if (fetchedEntries.length === 0) {
       toast.info("No Record found..");
       return;
@@ -1193,27 +1260,27 @@ const handleAKRtoPacket = () => {
         item.secondPrice
       ]));
     
-    if (enablePrizeFilter) {
-        const originalCount = allVoucherRows.length;
+    // if (enablePrizeFilter) {
+    //     const originalCount = allVoucherRows.length;
         
-        allVoucherRows = allVoucherRows.filter(([uniqueId, firstPrice, secondPrice]) => {
-          const firstPrizeCheck = firstPrizeLimit === 0 || firstPrice < firstPrizeLimit;
-          const secondPrizeCheck = secondPrizeLimit === 0 || secondPrice < secondPrizeLimit;
-          return firstPrizeCheck && secondPrizeCheck;
-        });
+    //     allVoucherRows = allVoucherRows.filter(([uniqueId, firstPrice, secondPrice]) => {
+    //       const firstPrizeCheck = firstPrizeLimit === 0 || firstPrice <= firstPrizeLimit;
+    //       const secondPrizeCheck = secondPrizeLimit === 0 || secondPrice <= secondPrizeLimit;
+    //       return firstPrizeCheck && secondPrizeCheck;
+    //     });
     
-        const filteredCount = allVoucherRows.length;
-        const excludedCount = originalCount - filteredCount;
+    //     const filteredCount = allVoucherRows.length;
+    //     const excludedCount = originalCount - filteredCount;
         
-        if (excludedCount > 0) {
-          toast.info(`${excludedCount} entries excluded due to prize limits. Showing ${filteredCount} entries.`);
-        }
+    //     if (excludedCount > 0) {
+    //       toast.info(`${excludedCount} entries excluded due to prize limits. Showing ${filteredCount} entries.`);
+    //     }
         
-        if (filteredCount === 0) {
-          toast.warning("No entries match the prize filter criteria.");
-          return;
-        }
-    }
+    //     if (filteredCount === 0) {
+    //       toast.warning("No entries match the prize filter criteria.");
+    //       return;
+    //     }
+    // }
 
     const totalEntries = allVoucherRows.length;
 
@@ -1231,7 +1298,11 @@ const handleAKRtoPacket = () => {
     const addHeader = () => {
       doc.setFont("helvetica", "bold");
       doc.setFontSize(18);
-      doc.text("Voucher Sheet", pageWidth / 2, 15, { align: "center" });
+      if(enablePrizeFilter && (firstPrizeLimit > 0 || secondPrizeLimit > 0)) {
+        doc.text("Voucher Sheet (Demand)", pageWidth / 2, 15, { align: "center" });
+      } else {
+        doc.text("Voucher Sheet", pageWidth / 2, 15, { align: "center" });
+      }
 
       doc.setFontSize(12);
       doc.setFont("helvetica", "normal");
@@ -1329,6 +1400,9 @@ const handleAKRtoPacket = () => {
 
   }
 
+  const generateDemandPDF = async () => {
+
+  }
   const generateOverLimitPDF = async () => {
     const fetchedEntries = await fetchVoucherData(drawDate, drawTime);
     if (fetchedEntries.length === 0) {
@@ -1353,8 +1427,8 @@ const handleAKRtoPacket = () => {
       const originalCount = allVoucherRows.length;
       
       allVoucherRows = allVoucherRows.filter(([uniqueId, firstPrice, secondPrice]) => {
-        const firstPrizeExceeds = firstPrizeLimit > 0 && firstPrice >= firstPrizeLimit;
-        const secondPrizeExceeds = secondPrizeLimit > 0 && secondPrice >= secondPrizeLimit;
+        const firstPrizeExceeds = firstPrizeLimit > 0 && firstPrice > firstPrizeLimit;
+        const secondPrizeExceeds = secondPrizeLimit > 0 && secondPrice > secondPrizeLimit;
         // Return true if ANY prize exceeds its limit
         return firstPrizeExceeds || secondPrizeExceeds;
       });
@@ -2526,8 +2600,11 @@ const handleAKRtoPacket = () => {
     else if (ledger === "DAILY BILL") {
       await generateDailyBillPDF();
     }
+    else if(ledger === "DEMAND"){
+      await generateVoucherPDF("demand");
+    }
     else if(ledger === "OVER LIMIT"){
-      await generateOverLimitPDF();
+      await generateVoucherPDF("overlimit");
     }
     else {
       toast.error("Please select a valid ledger type.");
@@ -2916,6 +2993,7 @@ const handleAKRtoPacket = () => {
               <option>LEDGER</option>
               <option>DAILY BILL</option>
               <option>VOUCHER</option>
+              <option>DEMAND</option>
               <option>OVER LIMIT</option>
             </select>
           </div>
@@ -2955,6 +3033,9 @@ const handleAKRtoPacket = () => {
                   placeholder="Enter limit"
                   min="0"
                 />
+              </div>
+              <div className="text-xs float-end">
+                <button className='bg-blue-600 px-4 py-2 rounded-md' onClick={saveOverLimit}>Save</button>
               </div>
               <div className="text-xs text-gray-400">
                 * Only entries with prizes below these limits will be included

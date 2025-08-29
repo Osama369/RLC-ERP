@@ -144,6 +144,7 @@ const Center = () => {
   const [firstPrizeLimit, setFirstPrizeLimit] = useState(0);
   const [secondPrizeLimit, setSecondPrizeLimit] = useState(0);
   const [enablePrizeFilter, setEnablePrizeFilter] = useState(true);
+  const [isDemandOverlimit, setIsDemandOverlimit] = useState(false);
 
   // pasr sms function
   const parseSMS = (sms) => {
@@ -262,6 +263,7 @@ const Center = () => {
     if (drawDate && drawTime) {
       getAndSetVoucherData();
       getWinningNumbers(drawDate, drawTime);  // Fetch winning numbers when date or time changes
+      getDemandOverlimit(drawDate, drawTime);
     }
   }, [drawDate, drawTime]);
 
@@ -403,6 +405,29 @@ const Center = () => {
       return [];
     }
   };
+
+  const getDemandOverlimit = async (date, time) => {
+    try {
+      const response = await axios.get("/api/v1/data/get-demand-overlimit", {
+        params: {
+          date: date,
+          timeSlot: time,
+        },
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      console.log("Demand Overlimit response:", response);
+      if (response.data.exists) {
+        setIsDemandOverlimit(true);
+      } else {
+        setIsDemandOverlimit(false);
+      }
+    } catch (error) {
+      console.error("Error fetching demand overlimit:", error);
+      setIsDemandOverlimit(false);
+    }
+  }
 
   const getAndSetVoucherData = async () => {  // use in to fetch data base on time/date
     const fetchedData = await fetchVoucherData(drawDate, drawTime);
@@ -1269,6 +1294,10 @@ const handleAKRtoPacket = () => {
   }
   
   const saveOverLimit = async () => {
+    if(isDemandOverlimit){
+      toast.warning("Demand/Overlimit entries already exist for this draw time.");
+      return;
+    }
     try {
       const { demand, overlimit } = splitEntriesByLimit(entries, firstPrizeLimit, secondPrizeLimit);
       console.log("Demand Entries:", demand);

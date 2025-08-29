@@ -255,10 +255,32 @@ const setWinningNumbers = async (req, res) => {
     }
 }
 
+const getDemandOverlimit = async (req, res) => {
+    const { date, timeSlot } = req.query;
+    if (!date || !timeSlot) {
+        return res.status(400).json({ error: "Both date and timeSlot are required" });
+    } 
+    try {
+        const data = await Data.exists({
+            userId: req.user.id,
+            date,
+            timeSlot,
+            category: "overlimit"
+          });
+        if (!data) {
+            return res.status(200).json({ message: "No overlimit data found for the given date and timeSlot", exists: false });
+        }
+        res.status(200).json({ message: "Overlimit data exists for the given date and timeSlot" , exists: true });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+}
+
 export {
     addDataForTimeSlot,
     getDataForDate,
     addOverlimitData,
+    getDemandOverlimit,
     deleteDataObjectById,
     getAllDocuments,
     getWinningNumbers,

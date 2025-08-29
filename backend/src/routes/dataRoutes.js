@@ -3,6 +3,7 @@ import {
     addDataForTimeSlot,
     getDataForDate,
     addOverlimitData,
+    getDemandOverlimit,
     getAllDocuments,
     deleteDataObjectById,
     getWinningNumbers,
@@ -16,6 +17,7 @@ const dataRouter = express.Router();
 dataRouter.post("/add-data", authMiddleware, addDataForTimeSlot);
 dataRouter.post("/add-overlimit-data", authMiddleware, addOverlimitData); // this is used to add overlimit data and is used in the frontend to add overlimit data
 dataRouter.get("/get-data", authMiddleware, getDataForDate); // this is used to get data for a specific date or slot and is used in the frontend to get data for a specific date or slot
+dataRouter.get("/get-demand-overlimit", authMiddleware, getDemandOverlimit); // this is used to get demand overlimit data
 dataRouter.get("/get-all-documents",  getAllDocuments);  // this is used to get all documents for a specific user and is used in the frontend to get all documents for a specific user
 dataRouter.delete("/delete-data/:id", authMiddleware,  deleteDataObjectById); // this is used to delete a specific data object by id and is used in the frontend to delete a specific data object by id
 dataRouter.get("/get-winning-numbers", authMiddleware, getWinningNumbers); // this is used to get winning numbers for a specific date and time slot

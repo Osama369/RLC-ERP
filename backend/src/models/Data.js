@@ -15,6 +15,11 @@ const dataSchema = new mongoose.Schema({
         required: true,
         default: Date.now,
     },
+    category: {
+        type: String,
+        enum: ["general", "demand", "overlimit"],
+        default: "general"
+    },
     data: [
         {
             uniqueId: {

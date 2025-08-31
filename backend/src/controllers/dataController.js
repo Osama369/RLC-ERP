@@ -3,7 +3,7 @@ import User from "../models/User.js";
 import Winner from "../models/Winner.js";
 
 const addDataForTimeSlot = async (req, res) => {
-    const { timeSlot, data } = req.body;
+    const { timeSlot, data, category } = req.body;
     try {
         // Calculate total amount from firstPrice and secondPrice
         const totalAmount = data.reduce((sum, item) => {
@@ -22,7 +22,7 @@ const addDataForTimeSlot = async (req, res) => {
                 requiredAmount: totalAmount 
             });
         }
-        const newData = new Data({ userId : req.user.id, timeSlot, data , date : new Date().toISOString().slice(0, 10) });
+        const newData = new Data({ userId : req.user.id, timeSlot, category, data, date : new Date().toISOString().slice(0, 10) });
         await newData.save();
         // Deduct the total amount from user's balance
         user.balance -= totalAmount;
@@ -34,11 +34,28 @@ const addDataForTimeSlot = async (req, res) => {
     }
 }
 
+const addOverlimitData = async (req, res) => {
+    const { timeSlot, data, category } = req.body;
+    try {
+        // Find the user and check if they have sufficient balance
+        const user = await User.findById(req.user.id);
+        if (!user) {
+            return res.status(404).json({ error: "User not found" });
+        }
+        const newData = new Data({ userId : req.user.id, timeSlot, category, data, date : new Date().toISOString().slice(0, 10) });
+        await newData.save();
+        
+        res.status(201).json({ message: "Data added successfully" , newData });
+    } catch (error) {
+        res.status(400).json({ error: error.message });
+    }
+}
+
 
 // getDataForDate is used to get data for a specific date or slot
 // and is used in the frontend to get data for a specific date or slot
 const getDataForDate = async (req, res) => {   
-    const { date, timeSlot } = req.query;
+    const { date, timeSlot, category } = req.query;
   
     if (!date || !timeSlot) {
       return res.status(400).json({ error: "Both date and timeSlot are required" });
@@ -49,6 +66,7 @@ const getDataForDate = async (req, res) => {
         userId: req.user.id,
         date,
         timeSlot,
+        category: category || "general" // default to "general" if not provided
       });
   
       if (!data || data.length === 0) {
@@ -237,9 +255,32 @@ const setWinningNumbers = async (req, res) => {
     }
 }
 
+const getDemandOverlimit = async (req, res) => {
+    const { date, timeSlot } = req.query;
+    if (!date || !timeSlot) {
+        return res.status(400).json({ error: "Both date and timeSlot are required" });
+    } 
+    try {
+        const data = await Data.exists({
+            userId: req.user.id,
+            date,
+            timeSlot,
+            category: "overlimit"
+          });
+        if (!data) {
+            return res.status(200).json({ message: "No overlimit data found for the given date and timeSlot", exists: false });
+        }
+        res.status(200).json({ message: "Overlimit data exists for the given date and timeSlot" , exists: true });
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+}
+
 export {
     addDataForTimeSlot,
     getDataForDate,
+    addOverlimitData,
+    getDemandOverlimit,
     deleteDataObjectById,
     getAllDocuments,
     getWinningNumbers,

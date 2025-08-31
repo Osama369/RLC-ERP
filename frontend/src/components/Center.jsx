@@ -73,6 +73,7 @@ const Center = () => {
       }
       if (autoMode) {
         handleSingleEntrySubmit(); // Auto Mode: Save immediately
+          
       } else {
         fInputRef.current?.focus(); // OFF Mode: Go to F
       }
@@ -95,12 +96,17 @@ const Center = () => {
       e.preventDefault();
       if (autoMode) {
         handleSingleEntrySubmit(); // Auto Mode: Save immediately
-      } else {
-        handleSingleEntrySubmit(); // Save entry in OFF mode
-        setNo("");
-        setF("");
-        setS("");
+         
+
+      } 
+      else {
+         handleSingleEntrySubmit(); // Save entry in OFF mode
+        // setNo("");
+        // setF("");
+        // setS("");
         noInputRef.current?.focus(); // Move focus to NO
+        
+        
       }
     }
   };
@@ -757,6 +763,10 @@ const Center = () => {
     return; // Already handled
   }
 
+  // Auto delete tandula to packet
+  if (handleTandulaToPacket()) {
+    return; // Already handled
+  }
 
     const entry = {
       id: entries.length + 1,
@@ -769,7 +779,7 @@ const Center = () => {
     addEntry([entry]);
 
     // Reset NO always
-    setNo("");
+    // setNo("");
    
 
     // Focus NO for next entry
@@ -1166,6 +1176,7 @@ const handleAKRtoTandula = () => {
     Number(f) % 10 === 0
   ) {
     const price = Number(f) / 10;
+    const priceS = !isNaN(Number(s)) ? Number(s) / 10 : s;
     const generated = [];
     for (let i = 0; i <= 9; i++) {
       // Replace '+' with current digit
@@ -1174,14 +1185,14 @@ const handleAKRtoTandula = () => {
         id: entries.length + generated.length + 1,
         no: newNo,
         f: price,
-        s: s,
+        s: priceS,
         selected: false,
       });
     }
     addEntry(generated);
     setNo("");
-    setF("");
-    setS("");
+    // setF("");
+    // setS("");
     noInputRef.current?.focus();
     return true; // handled
   }
@@ -1196,21 +1207,85 @@ const handleAKRtoPacket = () => {
     toast.warning("Draw time is closed. Cannot add entries.");
     return false;
   }
-  // Only run if NO is '++NN', F and S are numbers
+  // Support both ++NN and N++N patterns
   if (
     no.length === 4 &&
-    no.startsWith('++') &&
-    /^\d{2}$/.test(no.slice(2)) &&
     !isNaN(Number(f)) &&
     !isNaN(Number(s))
   ) {
-    const base = no.slice(2); // e.g., "10"
     const priceF = Number(f) / 100;
     const priceS = Number(s) / 100;
     const generated = [];
+    if (no.startsWith('++') && /^\d{2}$/.test(no.slice(2))) {
+      // ++NN pattern
+      const base = no.slice(2);
+      for (let i = 0; i <= 99; i++) {
+        const prefix = i.toString().padStart(2, '0');
+        const newNo = `${prefix}${base}`;
+        generated.push({
+          id: entries.length + generated.length + 1,
+          no: newNo,
+          f: priceF,
+          s: priceS,
+          selected: false,
+        });
+      }
+      addEntry(generated);
+      setNo("");
+      // setF("");
+      // setS("");
+      noInputRef.current?.focus();
+      return true;
+    } else if (/^\d\+\+\d$/.test(no)) {
+      // N++N pattern
+      const first = no[0];
+      const last = no[3];
+      for (let i = 0; i <= 99; i++) {
+        const infix = i.toString().padStart(2, '0');
+        const newNo = `${first}${infix}${last}`;
+        generated.push({
+          id: entries.length + generated.length + 1,
+          no: newNo,
+          f: priceF,
+          s: priceS,
+          selected: false,
+        });
+      }
+      addEntry(generated);
+      setNo("");
+      // setF("");
+      // setS("");
+      noInputRef.current?.focus();
+      return true;
+    } else if (/^\+\d{2}\+$/.test(no)) {
+      // +NN+ pattern (e.g., +10+)
+      const mid = no.slice(1, 3); // e.g., "10"
+      for (let i = 0; i <= 99; i++) {
+        const infix = i.toString().padStart(2, '0');
+        const newNo = `${infix[0]}${mid}${infix[1]}`;
+        generated.push({
+          id: entries.length + generated.length + 1,
+          no: newNo,
+          f: priceF,
+          s: priceS,
+          selected: false,
+        });
+      }
+      addEntry(generated);
+      setNo("");
+      // setF("");
+      // setS("");
+      noInputRef.current?.focus();
+      return true;
+    }
+
+    else if (/^\+\d\+\d$/.test(no)) {
+    // +N+N pattern (e.g., +1+0)
+    const first = no[1];
+    const last = no[3];
     for (let i = 0; i <= 99; i++) {
-      const prefix = i.toString().padStart(2, '0');
-      const newNo = `${prefix}${base}`;
+      const infix = i.toString().padStart(2, '0');
+      const newNo = `${infix[0]}${first}${infix[1]}${last}`;
       generated.push({
         id: entries.length + generated.length + 1,
         no: newNo,
@@ -1220,18 +1295,83 @@ const handleAKRtoPacket = () => {
       });
     }
     addEntry(generated);
-    setNo("");
-    setF("");
-    setS("");
-    noInputRef.current?.focus();
-    return true; // handled
+    setNo(""); noInputRef.current?.focus();
+    return true;
+  } 
+
+    
   }
-  return false; // not handled
+  return false;
 };
 
 
+// handleTandulaToPacket
 
-
+const handleTandulaToPacket = () => {
+    if (isPastClosingTime(drawTime)) {
+      toast.warning("Draw time is closed. Cannot add entries.");
+      return false;
+  }
+  
+  if (!no || !f || !s) return false;
+  const priceF = !isNaN(Number(f)) ? Number(f) / 10 : f;
+  const priceS = !isNaN(Number(s)) ? Number(s) / 10 : s;
+  const generated = [];
+  // +NNN pattern
+  if (/^\+\d{3}$/.test(no)) {
+    const base = no.slice(1); // e.g., "123"
+    for (let i = 0; i <= 9; i++) {
+      const newNo = `${i}${base}`;
+      generated.push({
+        id: entries.length + generated.length + 1,
+        no: newNo,
+        f: priceF,
+        s: priceS,
+        selected: false,
+      });
+    }
+    addEntry(generated);
+    setNo(""); noInputRef.current?.focus();
+    return true;
+  }
+  // N+NN pattern
+  if (/^\d\+\d{2}$/.test(no)) {
+    const first = no[0];
+    const base = no.slice(2); // e.g., "23"
+    for (let i = 0; i <= 9; i++) {
+      const newNo = `${first}${i}${base}`;
+      generated.push({
+        id: entries.length + generated.length + 1,
+        no: newNo,
+        f: priceF,
+        s: priceS,
+        selected: false,
+      });
+    }
+    addEntry(generated);
+    setNo(""); noInputRef.current?.focus();
+    return true;
+  }
+  // NN+N pattern
+  if (/^\d{2}\+\d$/.test(no)) {
+    const first = no.slice(0,2);
+    const last = no[3];
+    for (let i = 0; i <= 9; i++) {
+      const newNo = `${first}${i}${last}`;
+      generated.push({
+        id: entries.length + generated.length + 1,
+        no: newNo,
+        f: priceF,
+        s: priceS,
+        selected: false,
+      });
+    }
+    addEntry(generated);
+    setNo("");  noInputRef.current?.focus();
+    return true;
+  }
+  return false;
+};
 
 
   const handlePacket = () => {
@@ -3241,7 +3381,7 @@ const handleAKRtoPacket = () => {
       </tr>
     </thead>
     <tbody>
-      {Object.entries(groupedEntries).map(([parentId, group]) =>
+      {Object.entries(groupedEntries).reverse().map(([parentId, group]) =>
         group.map((entry, index) => (
           <tr key={entry.objectId || entry.id}>
             {/* ✅ Checkbox for each row */}

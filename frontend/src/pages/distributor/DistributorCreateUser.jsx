@@ -38,7 +38,7 @@ const DistributorCreateUser = ({theme}) => {
       navigate('/manage-users');
     } catch (error) {
       dispatch(hideLoading());
-      const errorMessage = error.response?.data?.message || 'Failed to create user';
+      const errorMessage = error.response?.data?.error || 'Failed to create user';
       setError(errorMessage);
       toast.error(errorMessage);
     }

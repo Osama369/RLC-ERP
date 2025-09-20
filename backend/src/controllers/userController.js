@@ -66,6 +66,15 @@ const updateUser = async (req, res) => {
       });
     }
     
+    const dealer = await User.findById(req.user.id);
+    if(dealer.role == 'distributor' && user.balance < updatedUserData.balance){ 
+      if(dealer.balance < (updatedUserData.balance - user.balance)) {
+        return res.status(400).json({ error: "Insufficient balance to update user" });
+      } else{
+        dealer.balance -= (updatedUserData.balance - user.balance); // Deduct the balance from distributor
+        await dealer.save();
+      }
+    }
     // Update fields
     Object.keys(updatedUserData).forEach(key => {
       user[key] = updatedUserData[key];
@@ -199,6 +208,13 @@ const createDistributorUser = async (req, res) => {
   const role = 'user'; // Distributor can only create regular users
   const createdBy = req.user.id; // Get the distributor ID from the authenticated user
   try {
+    const dealer = await User.findById(req.user.id);
+    if(!dealer || dealer.balance < balance) {
+      return res.status(400).json({ error: "Insufficient balance to create user" });
+    } else{
+      dealer.balance -= balance; // Deduct the balance from distributor
+      await dealer.save();
+    }
     const user = new User({ username, password, city, dealerId , phone , email, role, balance, singleFigure, doubleFigure, tripleFigure, fourFigure, commission, createdBy }); 
     await user.save();
     res.status(201).json({ message: "Distributor user created successfully" });

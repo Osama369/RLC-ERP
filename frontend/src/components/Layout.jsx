@@ -27,6 +27,7 @@ import {
 } from 'react-icons/fa';
 import RoleBasedComponent from './RoleBasedRoute';
 import { Link } from 'react-router-dom';
+import Reports from './Reports';
 const Layout = () => {
   // Hooks to manage states of the variables
   // State for ledger selection, date, and draw time
@@ -179,7 +180,7 @@ const handleLogout = (navigate) => {
       }}/>}
       {activeTab === "create-user" && <DistributorCreateUser theme="dark" />}
       {activeTab === "edit-user" && <DistributorEditUser userId={selectedUserId} theme="dark" />}
-      {activeTab === "reports" && <div className="p-6">Reports content coming soon...</div>}
+      {activeTab === "reports" && <Reports />}
     </div>
   </div>
   );

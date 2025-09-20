@@ -149,7 +149,7 @@ const Center = () => {
   ]);
   const [firstPrizeLimit, setFirstPrizeLimit] = useState(0);
   const [secondPrizeLimit, setSecondPrizeLimit] = useState(0);
-  const [enablePrizeFilter, setEnablePrizeFilter] = useState(true);
+  const [enablePrizeFilter, setEnablePrizeFilter] = useState(false);
   const [isDemandOverlimit, setIsDemandOverlimit] = useState(false);
 
   // pasr sms function
@@ -1474,12 +1474,36 @@ const handleTandulaToPacket = () => {
     }
   };
 
-  // 1. generate voucher pdf 
-  const generateVoucherPDF = async (category) => {
+  // Add this function in your Center component
+  const fetchCombinedVoucherData = async (selectedDate, selectedTimeSlot, category) => {
+    try {
+      const token = localStorage.getItem("token");
 
-    const fetchedEntries = await fetchVoucherData(drawDate, drawTime, category);
+      const response = await axios.get("/api/v1/data/get-combined-voucher-data", {
+        params: {
+          date: selectedDate,
+          timeSlot: selectedTimeSlot,
+          category: category
+        },
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      console.log("Combined voucher data:", response.data);
+      return response.data.data;
+    } catch (error) {
+      console.error("Error fetching combined voucher data:", error);
+      toast.error("Failed to fetch combined voucher data");
+      return [];
+    }
+  };
+
+  // Add this function in your Center component
+  const generateCombinedVoucherPDF = async (category = "general") => {
+    const fetchedEntries = await fetchCombinedVoucherData(drawDate, drawTime, category);
     if (fetchedEntries.length === 0) {
-      toast.info("No Record found..");
+      toast.info("No combined records found..");
       return;
     }
 
@@ -1487,58 +1511,519 @@ const handleTandulaToPacket = () => {
     const pageWidth = doc.internal.pageSize.width;
     const pageHeight = doc.internal.pageSize.height;
 
-    let allVoucherRows = fetchedEntries
-      .filter(entry => entry.timeSlot === drawTime) // Filter entries based on time and prize limits
-      .flatMap(entry => entry.data.map(item => [
-        item.uniqueId,
-        item.firstPrice,
-        item.secondPrice
-      ]));
-    
-    // if (enablePrizeFilter) {
-    //     const originalCount = allVoucherRows.length;
-        
-    //     allVoucherRows = allVoucherRows.filter(([uniqueId, firstPrice, secondPrice]) => {
-    //       const firstPrizeCheck = firstPrizeLimit === 0 || firstPrice <= firstPrizeLimit;
-    //       const secondPrizeCheck = secondPrizeLimit === 0 || secondPrice <= secondPrizeLimit;
-    //       return firstPrizeCheck && secondPrizeCheck;
-    //     });
-    
-    //     const filteredCount = allVoucherRows.length;
-    //     const excludedCount = originalCount - filteredCount;
-        
-    //     if (excludedCount > 0) {
-    //       toast.info(`${excludedCount} entries excluded due to prize limits. Showing ${filteredCount} entries.`);
-    //     }
-        
-    //     if (filteredCount === 0) {
-    //       toast.warning("No entries match the prize filter criteria.");
-    //       return;
-    //     }
-    // }
+    // Process and combine all entries
+    const allVoucherRows = fetchedEntries
+      .filter(entry => entry.timeSlot === drawTime)
+      .flatMap(entry => 
+        entry.data.map(item => ({
+          number: item.uniqueId,
+          first: item.firstPrice,
+          second: item.secondPrice,
+          dealer: entry.userId.username,
+          dealerId: entry.userId.dealerId
+        }))
+      );
 
-    const totalEntries = allVoucherRows.length;
+    // Group duplicate entries and sum their prizes
+    const combinedEntries = {};
+    allVoucherRows.forEach(({ number, first, second, dealer, dealerId }) => {
+      const key = number;
+      if (combinedEntries[key]) {
+        combinedEntries[key].first += first;
+        combinedEntries[key].second += second;
+        combinedEntries[key].dealers.add(`${dealer}(${dealerId})`);
+        combinedEntries[key].count += 1;
+      } else {
+        combinedEntries[key] = {
+          number,
+          first,
+          second,
+          dealers: new Set([`${dealer}(${dealerId})`]),
+          count: 1
+        };
+      }
+    });
 
-    // ✅ Calculate totals
-    const totals = allVoucherRows.reduce(
-      (acc, row) => {
-        acc.firstTotal += row[1];
-        acc.secondTotal += row[2];
-        return acc;
-      },
-      { firstTotal: 0, secondTotal: 0 }
-    );
-    const grandTotal = totals.firstTotal + totals.secondTotal;
+    // Convert to array and sort
+    const processedEntries = Object.values(combinedEntries).map(entry => ({
+      ...entry,
+      dealers: Array.from(entry.dealers).join(', ')
+    }));
+
+    // Split entries into categories with ascending sorting
+    const hinsa = [], akra = [], tandola = [], pangora = [];
+
+    processedEntries.forEach(({ number, first, second, dealers, count }) => {
+      if (/^\d{1}$/.test(number)) {
+        hinsa.push([number, first, second, dealers, count]);
+      } else if (
+        /^\d{2}$/.test(number) ||
+        (number.includes('+') && number.length <= 3)
+      ) {
+        akra.push([number, first, second, dealers, count]);
+      } else if (
+        /^\d{3}$/.test(number) ||
+        (number.length === 4 && number.includes('+'))
+      ) {
+        tandola.push([number, first, second, dealers, count]);
+      } else if (/^\d{4}$/.test(number)) {
+        pangora.push([number, first, second, dealers, count]);
+      }
+    });
+
+    // Sort each section in ascending order
+    const sortEntries = (entries) => {
+      return entries.sort((a, b) => {
+        const numA = a[0].replace(/\+/g, '');
+        const numB = b[0].replace(/\+/g, '');
+        return numA.localeCompare(numB, undefined, { numeric: true });
+      });
+    };
+
+    sortEntries(hinsa);
+    sortEntries(akra);
+    sortEntries(tandola);
+    sortEntries(pangora);
+
+    const totalEntries = processedEntries.length;
+    const totalRecords = processedEntries.reduce((sum, entry) => sum + entry.count, 0);
+
+    // Calculate totals for each section
+    const calculateSectionTotals = (rows) => {
+      return rows.reduce(
+        (acc, row) => {
+          acc.firstTotal += row[1];
+          acc.secondTotal += row[2];
+          acc.recordCount += row[4];
+          return acc;
+        },
+        { firstTotal: 0, secondTotal: 0, recordCount: 0 }
+      );
+    };
+
+    const hinsaTotals = calculateSectionTotals(hinsa);
+    const akraTotals = calculateSectionTotals(akra);
+    const tandolaTotals = calculateSectionTotals(tandola);
+    const pangoraTotals = calculateSectionTotals(pangora);
+
+    const grandTotals = {
+      firstTotal: hinsaTotals.firstTotal + akraTotals.firstTotal + tandolaTotals.firstTotal + pangoraTotals.firstTotal,
+      secondTotal: hinsaTotals.secondTotal + akraTotals.secondTotal + tandolaTotals.secondTotal + pangoraTotals.secondTotal,
+      recordCount: hinsaTotals.recordCount + akraTotals.recordCount + tandolaTotals.recordCount + pangoraTotals.recordCount
+    };
+    const grandTotal = grandTotals.firstTotal + grandTotals.secondTotal;
 
     const addHeader = () => {
       doc.setFont("helvetica", "bold");
       doc.setFontSize(18);
-      if(enablePrizeFilter && (firstPrizeLimit > 0 || secondPrizeLimit > 0)) {
-        doc.text("Voucher Sheet (Demand)", pageWidth / 2, 15, { align: "center" });
-      } else {
-        doc.text("Voucher Sheet", pageWidth / 2, 15, { align: "center" });
+      doc.text("Combined Voucher Sheet", pageWidth / 2, 15, { align: "center" });
+
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "normal");
+      doc.text(`Main Dealer: ${userData?.user.username} (${userData?.user.dealerId})`, 14, 30);
+      doc.text(`City: ${userData?.user.city}`, 14, 40);
+      doc.text(`Draw Date: ${drawDate}`, 14, 50);
+      doc.text(`Draw Time: ${drawTime}`, 14, 60);
+      doc.text(`Unique Entries: ${totalEntries}`, 14, 70);
+      doc.text(`Total Records: ${totalRecords}`, 14, 80);
+
+      // Add grand totals
+      doc.text(`First Total: ${grandTotals.firstTotal}`, 110, 50);
+      doc.text(`Second Total: ${grandTotals.secondTotal}`, 110, 60);
+      doc.text(`Grand Total: ${grandTotal}`, 110, 70);
+      doc.text(`Total Records: ${grandTotals.recordCount}`, 110, 80);
+    };
+
+    // Function to render each section
+    const renderSection = (title, rows, startY = 90) => {
+      if (rows.length === 0) return startY;
+
+      const rowHeight = 7;
+      const colWidths = [18, 12, 12, 12, 40]; // Number, First, Second, Count, Dealers
+      const tableWidth = colWidths.reduce((a, b) => a + b, 0);
+      const gapBetweenTables = 5;
+      const xStart = 14;
+
+      let y = startY;
+
+      // Section header with totals
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(14);
+      doc.text(`${title}`, 14, y);
+      y += 6;
+      let commissionRate = 0;
+      if (title === "HINSA") {
+        commissionRate = userData?.user.singleFigure;
+      } else if (title === "AKRA") {
+        commissionRate = userData?.user.doubleFigure;
+      } else if (title === "TANDOLA") {
+        commissionRate = userData?.user.tripleFigure;
+      } else if (title === "PANGORA") {
+        commissionRate = userData?.user.fourFigure;
+      }
+      const sectionTotals = calculateSectionTotals(rows);
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "normal");
+      doc.text(`First: ${sectionTotals.firstTotal}`, 14, y);
+      doc.text(`Second: ${sectionTotals.secondTotal}`, 50, y);
+      doc.text(`Total: ${sectionTotals.firstTotal + sectionTotals.secondTotal}`, 90, y);
+      // doc.text(`Records: ${sectionTotals.recordCount}`, 130, y);
+      doc.text(`Commission (${commissionRate}%)`, 130, y);
+      y += 8;
+
+      // Split rows into two columns for better layout
+      const halfPoint = Math.ceil(rows.length / 2);
+      const leftRows = rows.slice(0, halfPoint);
+      const rightRows = rows.slice(halfPoint);
+
+      // Table positions
+      const leftX = xStart;
+      const rightX = leftX + tableWidth + gapBetweenTables;
+
+      // Function to draw table header
+      const drawTableHeader = (x, y) => {
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8);
+
+        doc.rect(x, y, colWidths[0], rowHeight);
+        doc.text("Number", x + 1, y + 5);
+
+        doc.rect(x + colWidths[0], y, colWidths[1], rowHeight);
+        doc.text("First", x + colWidths[0] + 1, y + 5);
+
+        doc.rect(x + colWidths[0] + colWidths[1], y, colWidths[2], rowHeight);
+        doc.text("Second", x + colWidths[0] + colWidths[1] + 1, y + 5);
+
+        // doc.rect(x + colWidths[0] + colWidths[1] + colWidths[2], y, colWidths[3], rowHeight);
+        // doc.text("Count", x + colWidths[0] + colWidths[1] + colWidths[2] + 1, y + 5);
+
+        // doc.rect(x + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3], y, colWidths[4], rowHeight);
+        // doc.text("Dealers", x + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3] + 1, y + 5);
+
+        return y + rowHeight;
+      };
+
+      // Draw headers for both tables
+      let headerY = drawTableHeader(leftX, y);
+      if (rightRows.length > 0) {
+        drawTableHeader(rightX, y);
       }
 
+      // Synchronized drawing of both tables
+      let currentY = headerY;
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7);
+
+      const maxRows = Math.max(leftRows.length, rightRows.length);
+
+      for (let i = 0; i < maxRows; i++) {
+        // Check if we need a new page
+        if (currentY > pageHeight - 30) {
+          doc.addPage();
+          
+          // Add section header on new page
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(14);
+          doc.text(title + " (continued...)", 14, 20);
+          
+          // Reset Y position and redraw table headers
+          currentY = 35;
+          
+          drawTableHeader(leftX, currentY);
+          if (rightRows.length > 0) {
+            drawTableHeader(rightX, currentY);
+          }
+          
+          currentY += rowHeight;
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(7);
+        }
+
+        // Draw left table row
+        if (i < leftRows.length) {
+          const [number, first, second, dealers, count] = leftRows[i];
+          const entryColor = getEntryColor(number);
+
+          doc.rect(leftX, currentY, colWidths[0], rowHeight);
+          doc.setTextColor(entryColor[0], entryColor[1], entryColor[2]);
+          doc.text(number.toString(), leftX + 1, currentY + 5);
+          doc.setTextColor(0, 0, 0);
+
+          doc.rect(leftX + colWidths[0], currentY, colWidths[1], rowHeight);
+          doc.text(first.toString(), leftX + colWidths[0] + 1, currentY + 5);
+
+          doc.rect(leftX + colWidths[0] + colWidths[1], currentY, colWidths[2], rowHeight);
+          doc.text(second.toString(), leftX + colWidths[0] + colWidths[1] + 1, currentY + 5);
+
+          // doc.rect(leftX + colWidths[0] + colWidths[1] + colWidths[2], currentY, colWidths[3], rowHeight);
+          // doc.text(count.toString(), leftX + colWidths[0] + colWidths[1] + colWidths[2] + 1, currentY + 5);
+
+          // doc.rect(leftX + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3], currentY, colWidths[4], rowHeight);
+          // const truncatedDealers = dealers.length > 35 ? dealers.substring(0, 35) + "..." : dealers;
+          // doc.text(truncatedDealers, leftX + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3] + 1, currentY + 5);
+        }
+
+        // Draw right table row
+        if (i < rightRows.length) {
+          const [number, first, second, dealers, count] = rightRows[i];
+          const entryColor = getEntryColor(number);
+
+          doc.rect(rightX, currentY, colWidths[0], rowHeight);
+          doc.setTextColor(entryColor[0], entryColor[1], entryColor[2]);
+          doc.text(number.toString(), rightX + 1, currentY + 5);
+          doc.setTextColor(0, 0, 0);
+
+          doc.rect(rightX + colWidths[0], currentY, colWidths[1], rowHeight);
+          doc.text(first.toString(), rightX + colWidths[0] + 1, currentY + 5);
+
+          doc.rect(rightX + colWidths[0] + colWidths[1], currentY, colWidths[2], rowHeight);
+          doc.text(second.toString(), rightX + colWidths[0] + colWidths[1] + 1, currentY + 5);
+
+          // doc.rect(rightX + colWidths[0] + colWidths[1] + colWidths[2], currentY, colWidths[3], rowHeight);
+          // doc.text(count.toString(), rightX + colWidths[0] + colWidths[1] + colWidths[2] + 1, currentY + 5);
+
+          // doc.rect(rightX + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3], currentY, colWidths[4], rowHeight);
+          // const truncatedDealers = dealers.length > 35 ? dealers.substring(0, 35) + "..." : dealers;
+          // doc.text(truncatedDealers, rightX + colWidths[0] + colWidths[1] + colWidths[2] + colWidths[3] + 1, currentY + 5);
+        }
+
+        currentY += rowHeight;
+      }
+
+      return currentY + 15; // Extra space between sections
+    };
+
+    addHeader();
+    let nextY = 100;
+
+    // Render each section if it has entries
+    if (hinsa.length > 0) {
+      nextY = renderSection("HINSA", hinsa, nextY);
+    }
+    if (akra.length > 0) {
+      nextY = renderSection("AKRA", akra, nextY);
+    }
+    if (tandola.length > 0) {
+      nextY = renderSection("TANDOLA", tandola, nextY);
+    }
+    if (pangora.length > 0) {
+      nextY = renderSection("PANGORA", pangora, nextY);
+    }
+
+    doc.save("Combined_Voucher_Sheet_RLC.pdf");
+    toast.success("Combined Voucher PDF downloaded successfully!");
+  };
+
+  // 1. generate voucher pdf 
+  // const generateVoucherPDF = async (category) => {
+
+  //   const fetchedEntries = await fetchVoucherData(drawDate, drawTime, category);
+  //   if (fetchedEntries.length === 0) {
+  //     toast.info("No Record found..");
+  //     return;
+  //   }
+
+  //   const doc = new jsPDF("p", "mm", "a4");
+  //   const pageWidth = doc.internal.pageSize.width;
+  //   const pageHeight = doc.internal.pageSize.height;
+
+  //   let allVoucherRows = fetchedEntries
+  //     .filter(entry => entry.timeSlot === drawTime) // Filter entries based on time and prize limits
+  //     .flatMap(entry => entry.data.map(item => [
+  //       item.uniqueId,
+  //       item.firstPrice,
+  //       item.secondPrice
+  //     ]));
+
+  //   const totalEntries = allVoucherRows.length;
+
+  //   // ✅ Calculate totals
+  //   const totals = allVoucherRows.reduce(
+  //     (acc, row) => {
+  //       acc.firstTotal += row[1];
+  //       acc.secondTotal += row[2];
+  //       return acc;
+  //     },
+  //     { firstTotal: 0, secondTotal: 0 }
+  //   );
+  //   const grandTotal = totals.firstTotal + totals.secondTotal;
+
+  //   const addHeader = () => {
+  //     doc.setFont("helvetica", "bold");
+  //     doc.setFontSize(18);
+  //     if(enablePrizeFilter && (firstPrizeLimit > 0 || secondPrizeLimit > 0)) {
+  //       doc.text("Voucher Sheet (Demand)", pageWidth / 2, 15, { align: "center" });
+  //     } else {
+  //       doc.text("Voucher Sheet", pageWidth / 2, 15, { align: "center" });
+  //     }
+
+  //     doc.setFontSize(12);
+  //     doc.setFont("helvetica", "normal");
+  //     doc.text(`Dealer Name: ${userData?.user.username}`, 14, 30);
+  //     doc.text(`City: ${userData?.user.city}`, 14, 40);
+  //     doc.text(`Draw Date: ${drawDate}`, 14, 50);
+  //     doc.text(`Draw Time: ${drawTime}`, 14, 60);
+  //     doc.text(`Total Entries: ${totalEntries}`, 14, 70);
+
+
+
+  //     // ✅ Add Totals
+  //     doc.text(`First Total: ${totals.firstTotal}`, 110, 50);
+  //     doc.text(`Second Total: ${totals.secondTotal}`, 110, 60);
+  //     doc.text(`Grand Total: ${grandTotal}`, 110, 70);
+  //   };
+
+  //   addHeader();
+
+  //   let startY = 80; // After the total entries line
+  //   let rowHeight = 7; // Row height
+  //   const colWidths = [20, 15, 15]; // Widths for Number, First, Second
+  //   const tableWidth = colWidths.reduce((a, b) => a + b, 0);
+  //   const gapBetweenTables = 8; // Space between tables
+  //   const xStart = 14;
+
+  //   // Set manual 4 columns
+  //   const xOffsets = [];
+  //   for (let i = 0; i < 3; i++) {
+  //     xOffsets.push(xStart + i * (tableWidth + gapBetweenTables));
+  //   }
+
+  //   let currentXIndex = 0;
+  //   let currentY = startY;
+
+  //   const printTableHeader = (x, y) => {
+  //     doc.setFont("helvetica", "bold");
+  //     doc.setFontSize(10);
+
+  //     doc.rect(x, y, colWidths[0], rowHeight);
+  //     doc.text("Number", x + 2, y + 5);
+
+  //     doc.rect(x + colWidths[0], y, colWidths[1], rowHeight);
+  //     doc.text("First", x + colWidths[0] + 2, y + 5);
+
+  //     doc.rect(x + colWidths[0] + colWidths[1], y, colWidths[2], rowHeight);
+  //     doc.text("Second", x + colWidths[0] + colWidths[1] + 2, y + 5);
+
+  //     doc.setFont("helvetica", "normal");
+  //   };
+
+  //   // Print the first table header
+  //   printTableHeader(xOffsets[currentXIndex], currentY);
+  //   currentY += rowHeight;
+
+  //   doc.setFont("helvetica", "normal");
+  //   doc.setFontSize(10);
+
+  //   allVoucherRows.forEach((row) => {
+  //     const [number, first, second] = row;
+  //     let x = xOffsets[currentXIndex];
+
+  //     // Draw cells
+  //     doc.rect(x, currentY, colWidths[0], rowHeight);
+  //     doc.text(number.toString(), x + 2, currentY + 5);
+
+  //     doc.rect(x + colWidths[0], currentY, colWidths[1], rowHeight);
+  //     doc.text(first.toString(), x + colWidths[0] + 2, currentY + 5);
+
+  //     doc.rect(x + colWidths[0] + colWidths[1], currentY, colWidths[2], rowHeight);
+  //     doc.text(second.toString(), x + colWidths[0] + colWidths[1] + 2, currentY + 5);
+
+  //     currentY += rowHeight;
+
+  //     if (currentY > pageHeight - 20) {
+  //       // Reached bottom of page
+  //       currentY = startY;
+  //       currentXIndex++;
+
+  //       if (currentXIndex >= xOffsets.length) {
+  //         // All columns filled, create new page
+  //         doc.addPage();
+  //         currentXIndex = 0;
+  //         currentY = startY;
+  //       }
+
+  //       // After new column or page, print new table header
+  //       printTableHeader(xOffsets[currentXIndex], currentY);
+  //       currentY += rowHeight;
+  //     }
+  //   });
+
+  //   doc.save("Voucher_Sheet_RLC.pdf");
+  //   toast.success("Voucher PDF downloaded successfully!");
+
+  // }
+  const generateVoucherPDF = async (category) => {
+    const fetchedEntries = await fetchVoucherData(drawDate, drawTime, category);
+    if (fetchedEntries.length === 0) {
+      toast.info("No Record found..");
+      return;
+    }
+  
+    const doc = new jsPDF("p", "mm", "a4");
+    const pageWidth = doc.internal.pageSize.width;
+    const pageHeight = doc.internal.pageSize.height;
+  
+    // Get all voucher rows and categorize them
+    const allVoucherRows = fetchedEntries
+      .filter(entry => entry.timeSlot === drawTime)
+      .flatMap(entry => entry.data.map(item => ({
+        number: item.uniqueId,
+        first: item.firstPrice,
+        second: item.secondPrice
+      })));
+  
+    // Split entries into categories (same logic as in generateLedgerPDF)
+    const hinsa = [], akra = [], tandola = [], pangora = [];
+  
+    allVoucherRows.forEach(({ number, first, second }) => {
+      if (/^\d{1}$/.test(number)) {
+        // Single digit numbers go to hinsa
+        hinsa.push([number, first, second]);
+      } else if (
+        /^\d{2}$/.test(number) ||
+        (number.includes('+') && number.length <= 3)
+      ) {
+        akra.push([number, first, second]);
+      } else if (
+        /^\d{3}$/.test(number) ||
+        (number.length === 4 && number.includes('+'))
+      ) {
+        tandola.push([number, first, second]);
+      } else if (/^\d{4}$/.test(number)) {
+        pangora.push([number, first, second]);
+      }
+    });
+  
+    const totalEntries = allVoucherRows.length;
+  
+    // Calculate totals for each section
+    const calculateSectionTotals = (rows) => {
+      return rows.reduce(
+        (acc, row) => {
+          acc.firstTotal += row[1];
+          acc.secondTotal += row[2];
+          return acc;
+        },
+        { firstTotal: 0, secondTotal: 0 }
+      );
+    };
+  
+    const hinsaTotals = calculateSectionTotals(hinsa);
+    const akraTotals = calculateSectionTotals(akra);
+    const tandolaTotals = calculateSectionTotals(tandola);
+    const pangoraTotals = calculateSectionTotals(pangora);
+  
+    const grandTotals = {
+      firstTotal: hinsaTotals.firstTotal + akraTotals.firstTotal + tandolaTotals.firstTotal + pangoraTotals.firstTotal,
+      secondTotal: hinsaTotals.secondTotal + akraTotals.secondTotal + tandolaTotals.secondTotal + pangoraTotals.secondTotal
+    };
+    const grandTotal = grandTotals.firstTotal + grandTotals.secondTotal;
+  
+    const addHeader = () => {
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(18);
+      doc.text("Voucher Sheet by Sections", pageWidth / 2, 15, { align: "center" });
+  
       doc.setFontSize(12);
       doc.setFont("helvetica", "normal");
       doc.text(`Dealer Name: ${userData?.user.username}`, 14, 30);
@@ -1546,94 +2031,183 @@ const handleTandulaToPacket = () => {
       doc.text(`Draw Date: ${drawDate}`, 14, 50);
       doc.text(`Draw Time: ${drawTime}`, 14, 60);
       doc.text(`Total Entries: ${totalEntries}`, 14, 70);
-
-
-
-      // ✅ Add Totals
-      doc.text(`First Total: ${totals.firstTotal}`, 110, 50);
-      doc.text(`Second Total: ${totals.secondTotal}`, 110, 60);
+  
+      // Add grand totals
+      doc.text(`First Total: ${grandTotals.firstTotal}`, 110, 50);
+      doc.text(`Second Total: ${grandTotals.secondTotal}`, 110, 60);
       doc.text(`Grand Total: ${grandTotal}`, 110, 70);
     };
-
-    addHeader();
-
-    let startY = 80; // After the total entries line
-    let rowHeight = 7; // Row height
-    const colWidths = [20, 15, 15]; // Widths for Number, First, Second
-    const tableWidth = colWidths.reduce((a, b) => a + b, 0);
-    const gapBetweenTables = 8; // Space between tables
-    const xStart = 14;
-
-    // Set manual 4 columns
-    const xOffsets = [];
-    for (let i = 0; i < 3; i++) {
-      xOffsets.push(xStart + i * (tableWidth + gapBetweenTables));
-    }
-
-    let currentXIndex = 0;
-    let currentY = startY;
-
-    const printTableHeader = (x, y) => {
+  
+    // Function to render each section
+    const renderSection = (title, rows, startY = 80) => {
+      if (rows.length === 0) return startY;
+  
+      const rowHeight = 7;
+      const colWidths = [20, 15, 15];
+      const tableWidth = colWidths.reduce((a, b) => a + b, 0);
+      const gapBetweenTables = 8;
+      const xStart = 14;
+  
+      let y = startY;
+  
+      // Section header with totals
       doc.setFont("helvetica", "bold");
+      doc.setFontSize(14);
+      doc.text(`${title} (${rows.length} entries)`, 14, y);
+      y += 6;
+  
+      const sectionTotals = calculateSectionTotals(rows);
       doc.setFontSize(10);
-
-      doc.rect(x, y, colWidths[0], rowHeight);
-      doc.text("Number", x + 2, y + 5);
-
-      doc.rect(x + colWidths[0], y, colWidths[1], rowHeight);
-      doc.text("First", x + colWidths[0] + 2, y + 5);
-
-      doc.rect(x + colWidths[0] + colWidths[1], y, colWidths[2], rowHeight);
-      doc.text("Second", x + colWidths[0] + colWidths[1] + 2, y + 5);
-
       doc.setFont("helvetica", "normal");
-    };
-
-    // Print the first table header
-    printTableHeader(xOffsets[currentXIndex], currentY);
-    currentY += rowHeight;
-
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
-
-    allVoucherRows.forEach((row) => {
-      const [number, first, second] = row;
-      let x = xOffsets[currentXIndex];
-
-      // Draw cells
-      doc.rect(x, currentY, colWidths[0], rowHeight);
-      doc.text(number.toString(), x + 2, currentY + 5);
-
-      doc.rect(x + colWidths[0], currentY, colWidths[1], rowHeight);
-      doc.text(first.toString(), x + colWidths[0] + 2, currentY + 5);
-
-      doc.rect(x + colWidths[0] + colWidths[1], currentY, colWidths[2], rowHeight);
-      doc.text(second.toString(), x + colWidths[0] + colWidths[1] + 2, currentY + 5);
-
-      currentY += rowHeight;
-
-      if (currentY > pageHeight - 20) {
-        // Reached bottom of page
-        currentY = startY;
-        currentXIndex++;
-
-        if (currentXIndex >= xOffsets.length) {
-          // All columns filled, create new page
+      doc.text(`First: ${sectionTotals.firstTotal}`, 14, y);
+      doc.text(`Second: ${sectionTotals.secondTotal}`, 60, y);
+      doc.text(`Total: ${sectionTotals.firstTotal + sectionTotals.secondTotal}`, 110, y);
+      y += 10;
+  
+      // Split rows into three columns for better layout
+      const thirdPoint = Math.ceil(rows.length / 3);
+      const leftRows = rows.slice(0, thirdPoint);
+      const middleRows = rows.slice(thirdPoint, thirdPoint * 2);
+      const rightRows = rows.slice(thirdPoint * 2);
+  
+      // Table positions
+      const leftX = xStart;
+      const middleX = leftX + tableWidth + gapBetweenTables;
+      const rightX = middleX + tableWidth + gapBetweenTables;
+  
+      // Function to draw table header
+      const drawTableHeader = (x, y) => {
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(9);
+  
+        doc.rect(x, y, colWidths[0], rowHeight);
+        doc.text("Number", x + 2, y + 5);
+  
+        doc.rect(x + colWidths[0], y, colWidths[1], rowHeight);
+        doc.text("First", x + colWidths[0] + 2, y + 5);
+  
+        doc.rect(x + colWidths[0] + colWidths[1], y, colWidths[2], rowHeight);
+        doc.text("Second", x + colWidths[0] + colWidths[1] + 2, y + 5);
+  
+        return y + rowHeight;
+      };
+  
+      // Draw headers for all three tables
+      let headerY = drawTableHeader(leftX, y);
+      if (middleRows.length > 0) {
+        drawTableHeader(middleX, y);
+      }
+      if (rightRows.length > 0) {
+        drawTableHeader(rightX, y);
+      }
+  
+      // Synchronized drawing of all three tables
+      let currentY = headerY;
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+  
+      const maxRows = Math.max(leftRows.length, middleRows.length, rightRows.length);
+  
+      for (let i = 0; i < maxRows; i++) {
+        // Check if we need a new page
+        if (currentY > pageHeight - 20) {
           doc.addPage();
-          currentXIndex = 0;
-          currentY = startY;
+          
+          // Add section header on new page
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(14);
+          doc.text(title + " (continued...)", 14, 20);
+          
+          // Reset Y position and redraw ALL table headers
+          currentY = 35;
+          
+          drawTableHeader(leftX, currentY);
+          if (middleRows.length > 0) {
+            drawTableHeader(middleX, currentY);
+          }
+          if (rightRows.length > 0) {
+            drawTableHeader(rightX, currentY);
+          }
+          
+          currentY += rowHeight;
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(8);
         }
-
-        // After new column or page, print new table header
-        printTableHeader(xOffsets[currentXIndex], currentY);
+  
+        // Draw left table row
+        if (i < leftRows.length) {
+          const [number, first, second] = leftRows[i];
+          const entryColor = getEntryColor(number);
+  
+          doc.rect(leftX, currentY, colWidths[0], rowHeight);
+          doc.setTextColor(entryColor[0], entryColor[1], entryColor[2]);
+          doc.text(number.toString(), leftX + 2, currentY + 5);
+  
+          doc.rect(leftX + colWidths[0], currentY, colWidths[1], rowHeight);
+          doc.text(first.toString(), leftX + colWidths[0] + 2, currentY + 5);
+          doc.rect(leftX + colWidths[0] + colWidths[1], currentY, colWidths[2], rowHeight);
+          doc.text(second.toString(), leftX + colWidths[0] + colWidths[1] + 2, currentY + 5);
+          doc.setTextColor(0, 0, 0);
+        }
+  
+        // Draw middle table row
+        if (i < middleRows.length) {
+          const [number, first, second] = middleRows[i];
+          const entryColor = getEntryColor(number);
+  
+          doc.rect(middleX, currentY, colWidths[0], rowHeight);
+          doc.setTextColor(entryColor[0], entryColor[1], entryColor[2]);
+          doc.text(number.toString(), middleX + 2, currentY + 5);
+  
+          doc.rect(middleX + colWidths[0], currentY, colWidths[1], rowHeight);
+          doc.text(first.toString(), middleX + colWidths[0] + 2, currentY + 5);
+          doc.rect(middleX + colWidths[0] + colWidths[1], currentY, colWidths[2], rowHeight);
+          doc.text(second.toString(), middleX + colWidths[0] + colWidths[1] + 2, currentY + 5);
+          doc.setTextColor(0, 0, 0);
+        }
+  
+        // Draw right table row
+        if (i < rightRows.length) {
+          const [number, first, second] = rightRows[i];
+          const entryColor = getEntryColor(number);
+  
+          doc.rect(rightX, currentY, colWidths[0], rowHeight);
+          doc.setTextColor(entryColor[0], entryColor[1], entryColor[2]);
+          doc.text(number.toString(), rightX + 2, currentY + 5);
+  
+          doc.rect(rightX + colWidths[0], currentY, colWidths[1], rowHeight);
+          doc.text(first.toString(), rightX + colWidths[0] + 2, currentY + 5);
+          doc.rect(rightX + colWidths[0] + colWidths[1], currentY, colWidths[2], rowHeight);
+          doc.text(second.toString(), rightX + colWidths[0] + colWidths[1] + 2, currentY + 5);
+          doc.setTextColor(0, 0, 0);
+        }
+  
         currentY += rowHeight;
       }
-    });
-
-    doc.save("Voucher_Sheet_RLC.pdf");
-    toast.success("Voucher PDF downloaded successfully!");
-
-  }
+  
+      return currentY + 15; // Extra space between sections
+    };
+  
+    addHeader();
+    let nextY = 85;
+  
+    // Render each section if it has entries
+    if (hinsa.length > 0) {
+      nextY = renderSection("HINSA", hinsa, nextY);
+    }
+    if (akra.length > 0) {
+      nextY = renderSection("AKRA", akra, nextY);
+    }
+    if (tandola.length > 0) {
+      nextY = renderSection("TANDOLA", tandola, nextY);
+    }
+    if (pangora.length > 0) {
+      nextY = renderSection("PANGORA", pangora, nextY);
+    }
+  
+    doc.save("Voucher_Sheet_by_Sections_RLC.pdf");
+    toast.success("Voucher PDF by sections downloaded successfully!");
+  };
 
   const generateDemandPDF = async () => {
 
@@ -1906,19 +2480,6 @@ const handleTandulaToPacket = () => {
     const hinsa = [], akra = [], tandola = [], pangora = [];
 
     allVoucherRows.forEach(({ number, first, second }) => {
-      // if (
-      //   /^\d{2}$/.test(number) ||
-      //   (number.includes('+') && number.length <= 4)
-      // ) {
-      //   akra.push([number, first, second]);
-      // } else if (
-      //   /^\d{3}$/.test(number) ||
-      //   (number.length === 4 && number.includes('x'))
-      // ) {
-      //   tandola.push([number, first, second]);
-      // } else if (/^\d{4}$/.test(number)) {
-      //   pangora.push([number, first, second]);
-      // }
       if (/^\d{1}$/.test(number)) {
         // Single digit numbers go to hinsa
         hinsa.push([number, first, second]);
@@ -2568,8 +3129,6 @@ const handleTandulaToPacket = () => {
     toast.success("Ledger PDF downloaded successfully!");
   };
 
-
-
   const generateDailyBillPDF2 = async () => {
     console.log("Generating Daily Bill PDF...");
 
@@ -2840,6 +3399,15 @@ const handleTandulaToPacket = () => {
     }
     else if(ledger === "OVER LIMIT"){
       await generateVoucherPDF("overlimit");
+    }
+    else if(ledger === "COMBINED"){
+      await generateCombinedVoucherPDF();
+    }
+    else if(ledger === "COMBINED DEMAND"){
+      await generateCombinedVoucherPDF("demand");
+    }
+    else if(ledger === "COMBINED OVER LIMIT"){
+      await generateCombinedVoucherPDF("overlimit");
     }
     else {
       toast.error("Please select a valid ledger type.");
@@ -3228,12 +3796,20 @@ const handleTandulaToPacket = () => {
               <option>LEDGER</option>
               <option>DAILY BILL</option>
               <option>VOUCHER</option>
+              { userData?.user.role === 'distributor' && (
+              <>
               <option>DEMAND</option>
               <option>OVER LIMIT</option>
+              <option>COMBINED</option>
+              <option>COMBINED DEMAND</option>
+              <option>COMBINED OVER LIMIT</option>
+              </>
+              )}
             </select>
           </div>
 
-          {/* Prize Filter Toggle */}
+          { userData?.user.role === 'distributor' && (
+          /* Prize Filter Toggle */
           <div className="text-lg font-semibold flex items-center space-x-2">
             <input
               type="checkbox"
@@ -3243,6 +3819,7 @@ const handleTandulaToPacket = () => {
             />
             <span>Enable Prize Filter</span>
           </div>
+          )}
 
           {/* Prize Limit Inputs - Only show when filter is enabled */}
           {enablePrizeFilter && (

@@ -8,7 +8,9 @@ import {
     deleteDataObjectById,
     getWinningNumbers,
     setWinningNumbers,
-    deleteIndividualEntries
+    deleteIndividualEntries,
+    getCombinedVoucherData,
+    getDataForClient
 } from "../controllers/dataController.js";
 import { authMiddleware } from "../middlewares/authMiddleware.js";
 
@@ -17,11 +19,13 @@ const dataRouter = express.Router();
 dataRouter.post("/add-data", authMiddleware, addDataForTimeSlot);
 dataRouter.post("/add-overlimit-data", authMiddleware, addOverlimitData); // this is used to add overlimit data and is used in the frontend to add overlimit data
 dataRouter.get("/get-data", authMiddleware, getDataForDate); // this is used to get data for a specific date or slot and is used in the frontend to get data for a specific date or slot
+dataRouter.get("/get-client-data", authMiddleware, getDataForClient); // this is used by distributors to get data for their clients based on date, timeSlot, category, and userId
 dataRouter.get("/get-demand-overlimit", authMiddleware, getDemandOverlimit); // this is used to get demand overlimit data
 dataRouter.get("/get-all-documents",  getAllDocuments);  // this is used to get all documents for a specific user and is used in the frontend to get all documents for a specific user
 dataRouter.delete("/delete-data/:id", authMiddleware,  deleteDataObjectById); // this is used to delete a specific data object by id and is used in the frontend to delete a specific data object by id
 dataRouter.get("/get-winning-numbers", authMiddleware, getWinningNumbers); // this is used to get winning numbers for a specific date and time slot
 dataRouter.post("/set-winning-numbers", authMiddleware, setWinningNumbers); // this is used to set winning numbers for a specific date and time slot
 dataRouter.delete('/delete-individual-entries', authMiddleware, deleteIndividualEntries); // this is used to delete individual entries based on provided IDs
+dataRouter.get('/get-combined-voucher-data', authMiddleware, getCombinedVoucherData); // this is used to get combined voucher data
 
 export default dataRouter;

@@ -36,13 +36,14 @@ const addDataForTimeSlot = async (req, res) => {
 
 const addOverlimitData = async (req, res) => {
     const { timeSlot, data, category } = req.body;
+    const userId = req.query.userId || req.user.id; 
     try {
         // Find the user and check if they have sufficient balance
-        const user = await User.findById(req.user.id);
+        const user = await User.findById(userId);
         if (!user) {
             return res.status(404).json({ error: "User not found" });
         }
-        const newData = new Data({ userId : req.user.id, timeSlot, category, data, date : new Date().toISOString().slice(0, 10) });
+        const newData = new Data({ userId : userId, timeSlot, category, data, date : new Date().toISOString().slice(0, 10) });
         await newData.save();
         
         res.status(201).json({ message: "Data added successfully" , newData });
@@ -63,7 +64,7 @@ const getDataForDate = async (req, res) => {
   
     try {
       const data = await Data.find({
-        userId: req.user.id,
+        userId: req.user.id, // Use userId from query if provided (for distributors fetching client data)
         date,
         timeSlot,
         category: category || "general" // default to "general" if not provided
@@ -276,6 +277,77 @@ const getDemandOverlimit = async (req, res) => {
     }
 }
 
+const getCombinedVoucherData = async (req, res) => {
+    try {
+      const { date, timeSlot, category } = req.query;
+      const userId = req.user.id;
+  
+      if (!date || !timeSlot) {
+        return res.status(400).json({ error: "Date and timeSlot are required" });
+      }
+  
+      // Get user's own data
+      const userEntries = await Data.find({
+        userId: userId,
+        date: date,
+        timeSlot: timeSlot,
+        category: category || "general"
+      }).populate('userId', 'username dealerId');
+  
+      // Get user's clients data
+      const clients = await User.find({ createdBy: userId });
+      const clientIds = clients.map(client => client._id);
+      
+      const clientEntries = await Data.find({
+        userId: { $in: clientIds },
+        date: date,
+        timeSlot: timeSlot,
+        category: category || "general"
+      }).populate('userId', 'username dealerId');
+  
+      // Combine all entries
+      const allEntries = [...userEntries, ...clientEntries];
+  
+      res.status(200).json({
+        success: true,
+        data: allEntries,
+        userEntries: userEntries.length,
+        clientEntries: clientEntries.length,
+        totalEntries: allEntries.length,
+        clientIds: clientIds
+      });
+  
+    } catch (error) {
+      console.error("Error fetching combined voucher data:", error);
+      res.status(500).json({ error: error.message });
+    }
+};
+
+const getDataForClient = async (req, res) => {   
+    const { date, timeSlot, category, userId } = req.query;
+  
+    if (!date || !timeSlot) {
+      return res.status(400).json({ error: "Both date and timeSlot are required" });
+    }
+  
+    try {
+      const data = await Data.find({
+        userId: userId, // Use userId from query if provided (for distributors fetching client data)
+        date,
+        timeSlot,
+        category: category || "general" // default to "general" if not provided
+      });
+      console.log("Data for client:", data);
+      if (!data || data.length === 0) {
+        return res.status(404).json({ error: "No data found for the given date and timeSlot" });
+      }
+  
+      res.status(200).json({ data });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+}; 
+
 export {
     addDataForTimeSlot,
     getDataForDate,
@@ -285,6 +357,8 @@ export {
     getAllDocuments,
     getWinningNumbers,
     setWinningNumbers,
-    deleteIndividualEntries
+    deleteIndividualEntries,
+    getCombinedVoucherData,
+    getDataForClient
 }
 
